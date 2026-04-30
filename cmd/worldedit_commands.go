@@ -110,15 +110,21 @@ type Pos2Command struct{ playerCommand }
 func (Pos1Command) Run(src dcf.Source, o *dcf.Output, _ *world.Tx) {
 	p := src.(*player.Player)
 	pos := cube.PosFromVec3(p.Position())
-	session.Ensure(p).SetPos1(pos)
-	o.Printf("pos1 set to %v", pos)
+	if session.Ensure(p).SetPos1(pos) {
+		o.Printf("pos1 set to %v", pos)
+		return
+	}
+	o.Printf("pos1 unchanged (%v)", pos)
 }
 
 func (Pos2Command) Run(src dcf.Source, o *dcf.Output, _ *world.Tx) {
 	p := src.(*player.Player)
 	pos := cube.PosFromVec3(p.Position())
-	session.Ensure(p).SetPos2(pos)
-	o.Printf("pos2 set to %v", pos)
+	if session.Ensure(p).SetPos2(pos) {
+		o.Printf("pos2 set to %v", pos)
+		return
+	}
+	o.Printf("pos2 unchanged (%v)", pos)
 }
 
 type SetCommand struct {

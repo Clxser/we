@@ -45,8 +45,9 @@ func (h *Handler) HandleItemUse(ctx *player.Context) {
 func (h *Handler) HandleItemUseOnBlock(ctx *player.Context, pos cube.Pos, face cube.Face, vec mgl64.Vec3) {
 	if h.heldWand() {
 		ctx.Cancel()
-		session.Ensure(h.p).SetPos2(pos)
-		h.p.Messagef("pos2 set to %v", pos)
+		if session.Ensure(h.p).SetPos2(pos) {
+			h.p.Messagef("pos2 set to %v", pos)
+		}
 		return
 	}
 	if cfg, ok := h.heldBrush(); ok {
@@ -61,8 +62,9 @@ func (h *Handler) HandleItemUseOnBlock(ctx *player.Context, pos cube.Pos, face c
 func (h *Handler) HandleBlockBreak(ctx *player.Context, pos cube.Pos, drops *[]item.Stack, xp *int) {
 	if h.heldWand() {
 		ctx.Cancel()
-		session.Ensure(h.p).SetPos1(pos)
-		h.p.Messagef("pos1 set to %v", pos)
+		if session.Ensure(h.p).SetPos1(pos) {
+			h.p.Messagef("pos1 set to %v", pos)
+		}
 		return
 	}
 	h.ph.HandleBlockBreak(ctx, pos, drops, xp)

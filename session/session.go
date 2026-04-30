@@ -9,6 +9,7 @@ import (
 	"github.com/df-mc/we/edit"
 	"github.com/df-mc/we/geo"
 	"github.com/df-mc/we/history"
+	"github.com/google/uuid"
 )
 
 const defaultHistoryLimit = 40
@@ -39,9 +40,13 @@ func (s Selection) Area() (geo.Area, bool) {
 
 var sessions sync.Map
 
+func key(p *player.Player) uuid.UUID {
+	return p.UUID()
+}
+
 // Lookup returns the session for a player if present.
 func Lookup(p *player.Player) (*Session, bool) {
-	v, _ := sessions.Load(p)
+	v, _ := sessions.Load(key(p))
 	s, ok := v.(*Session)
 	return s, ok
 }
@@ -52,27 +57,35 @@ func Ensure(p *player.Player) *Session {
 		return s
 	}
 	s := &Session{p: p, history: history.NewHistory(defaultHistoryLimit)}
-	sessions.Store(p, s)
+	sessions.Store(key(p), s)
 	return s
 }
 
 // Delete removes state when the player leaves.
 func Delete(p *player.Player) {
-	sessions.Delete(p)
+	sessions.Delete(key(p))
 }
 
 // SetPos1 sets position 1.
-func (s *Session) SetPos1(pos cube.Pos) {
+func (s *Session) SetPos1(pos cube.Pos) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.selection.Has1 && s.selection.Pos1 == pos {
+		return false
+	}
 	s.selection.Pos1, s.selection.Has1 = pos, true
+	return true
 }
 
 // SetPos2 sets position 2.
-func (s *Session) SetPos2(pos cube.Pos) {
+func (s *Session) SetPos2(pos cube.Pos) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.selection.Has2 && s.selection.Pos2 == pos {
+		return false
+	}
 	s.selection.Pos2, s.selection.Has2 = pos, true
+	return true
 }
 
 // SelectionArea returns the current cuboid if valid.
