@@ -1,39 +1,119 @@
 package we
 
 import (
+	"iter"
+
 	"github.com/df-mc/dragonfly/server/block/cube"
-	"github.com/df-mc/dragonfly/server/event"
+	"github.com/df-mc/dragonfly/server/block/cube/trace"
 	"github.com/df-mc/dragonfly/server/item"
 	"github.com/df-mc/dragonfly/server/player"
+	"github.com/df-mc/dragonfly/server/world"
 	_ "github.com/df-mc/we/act"
-	"github.com/df-mc/we/brush"
+	_ "github.com/df-mc/we/cmd"
+	"github.com/df-mc/we/editbrush"
+	"github.com/df-mc/we/history"
+	"github.com/df-mc/we/keys"
 	"github.com/df-mc/we/palette"
+	"github.com/df-mc/we/session"
 	"github.com/go-gl/mathgl/mgl64"
 )
 
+// Handler is the main world-edit player handler.
 type Handler struct {
 	player.NopHandler
+	p  *player.Player
 	ph *palette.Handler
-	bh *brush.Handler
 }
 
+// NewHandler returns a player handler. WorldEdit commands register when the
+// cmd package is imported (blank import keeps registration tied to using we).
 func NewHandler(p *player.Player) *Handler {
-	return &Handler{ph: palette.NewHandler(p), bh: brush.NewHandler(p)}
+	session.Ensure(p)
+	return &Handler{p: p, ph: palette.NewHandler(p)}
 }
 
-func (h *Handler) HandleItemUse(ctx *event.Context) {
-	h.bh.HandleItemUse(ctx)
+// HandleItemUse implements item use (brush raycast when bound).
+func (h *Handler) HandleItemUse(ctx *player.Context) {
+	if cfg, ok := h.heldBrush(); ok {
+		ctx.Cancel()
+		h.applyBrush(ctx.Val().Tx(), h.brushTarget(ctx.Val().Tx()), cfg)
+		return
+	}
 }
 
-func (h *Handler) HandleItemUseOnBlock(ctx *event.Context, pos cube.Pos, face cube.Face, vec mgl64.Vec3) {
+// HandleItemUseOnBlock sets pos2 with the wand or applies a brush to a block face.
+func (h *Handler) HandleItemUseOnBlock(ctx *player.Context, pos cube.Pos, face cube.Face, vec mgl64.Vec3) {
+	if h.heldWand() {
+		ctx.Cancel()
+		session.Ensure(h.p).SetPos2(pos)
+		h.p.Messagef("pos2 set to %v", pos)
+		return
+	}
+	if cfg, ok := h.heldBrush(); ok {
+		ctx.Cancel()
+		h.applyBrush(ctx.Val().Tx(), pos.Side(face), cfg)
+		return
+	}
 	h.ph.HandleItemUseOnBlock(ctx, pos, face, vec)
 }
 
-func (h *Handler) HandleBlockBreak(ctx *event.Context, pos cube.Pos, drops *[]item.Stack) {
-	h.ph.HandleBlockBreak(ctx, pos, drops)
+// HandleBlockBreak sets pos1 when breaking with the wand.
+func (h *Handler) HandleBlockBreak(ctx *player.Context, pos cube.Pos, drops *[]item.Stack, xp *int) {
+	if h.heldWand() {
+		ctx.Cancel()
+		session.Ensure(h.p).SetPos1(pos)
+		h.p.Messagef("pos1 set to %v", pos)
+		return
+	}
+	h.ph.HandleBlockBreak(ctx, pos, drops, xp)
 }
 
-func (h *Handler) HandleQuit() {
-	h.bh.HandleQuit()
+// HandleQuit cleans up session state.
+func (h *Handler) HandleQuit(*player.Player) {
 	h.ph.HandleQuit()
+	session.Delete(h.p)
+}
+
+func (h *Handler) heldWand() bool {
+	held, _ := h.p.HeldItems()
+	_, ok := held.Value(keys.WandItemKey)
+	return ok
+}
+
+func (h *Handler) heldBrush() (editbrush.BrushConfig, bool) {
+	held, _ := h.p.HeldItems()
+	return editbrush.ConfigFromItem(held)
+}
+
+func (h *Handler) applyBrush(tx *world.Tx, target cube.Pos, cfg editbrush.BrushConfig) {
+	batch := history.NewBatch(true)
+	if err := editbrush.ApplyBrush(tx, h.p, target, cfg, batch); err != nil {
+		h.p.Message(err.Error())
+		return
+	}
+	session.Ensure(h.p).Record(batch)
+}
+
+var brushTraceBox = cube.Box(-0.125, -0.125, -0.125, 0.125, 0.125, 0.125)
+
+func (h *Handler) brushTarget(tx *world.Tx) cube.Pos {
+	const maxDistance = 128
+	start := h.p.Position().Add(mgl64.Vec3{0, h.p.EyeHeight()})
+	end := start.Add(h.p.Rotation().Vec3().Mul(maxDistance))
+	filter := func(seq iter.Seq[world.Entity]) iter.Seq[world.Entity] {
+		return func(yield func(world.Entity) bool) {
+			for e := range seq {
+				if e == h.p {
+					continue
+				}
+				if !yield(e) {
+					return
+				}
+			}
+		}
+	}
+	if res, ok := trace.Perform(start, end, tx, brushTraceBox, filter); ok {
+		return cube.PosFromVec3(res.Position())
+	}
+	return cube.PosFromVec3(end)
 }

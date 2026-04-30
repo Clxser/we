@@ -10,12 +10,12 @@ import (
 // Perform performs the world edit action passed in a specific shape, in the world that is passed. Perform
 // will only ever edit blocks found within the shape passed.
 // Perform returns a function which may be called to undo the modification.
-func Perform(pos cube.Pos, s Shape, a Action, w *world.World) (revert func()) {
+func Perform(pos cube.Pos, s Shape, a Action, tx *world.Tx) (revert func(*world.Tx)) {
 	d := s.Dim()
 	// The shapes measure according to a centre position, so the base of our structure is offset.
 	base := pos.Add(cube.Pos{-d[0] / 2, -d[1] / 2, -d[2] / 2})
-	st := &structure{base: base, s: s, a: a, d: d, w: w, cx: pos[0], cy: pos[1], cz: pos[2], m: make(map[cube.Pos]world.Block), r: rand.New(rand.NewSource(time.Now().UnixNano()))}
-	w.BuildStructure(base, st)
+	st := &structure{base: base, s: s, a: a, d: d, tx: tx, cx: pos[0], cy: pos[1], cz: pos[2], m: make(map[cube.Pos]world.Block), r: rand.New(rand.NewSource(time.Now().UnixNano()))}
+	tx.BuildStructure(base, st)
 	return st.Revert
 }
 
@@ -26,7 +26,7 @@ type structure struct {
 	a          Action
 	d          [3]int
 	cx, cy, cz int
-	w          *world.World
+	tx         *world.Tx
 	m          map[cube.Pos]world.Block
 	bAt        func(x, y, z int) world.Block
 	r          *rand.Rand
@@ -42,7 +42,7 @@ func (s *structure) Dimensions() [3]int {
 func (s *structure) At(x, y, z int, at func(x, y, z int) world.Block) (world.Block, world.Liquid) {
 	s.bAt = at
 	if s.s.Inside(s.cx, s.cy, s.cz, x+s.cx-s.d[0]/2, y+s.cy-s.d[1]/2, z+s.cz-s.d[2]/2) {
-		if v, liq := s.a.At(x, y, z, s.r, s.w, s.blockAt); v != nil {
+		if v, liq := s.a.At(x, y, z, s.r, s.tx, s.blockAt); v != nil {
 			s.m[cube.Pos{x, y, z}] = at(x, y, z)
 			s.bAt = nil
 			return v, liq
@@ -63,8 +63,8 @@ func (s *structure) blockAt(x, y, z int) world.Block {
 
 // Revert reverts the placement of the structure, placing back all blocks that were changed by the initial
 // placement.
-func (s *structure) Revert() {
-	s.w.BuildStructure(s.base, &structureRevert{d: s.d, m: s.m})
+func (s *structure) Revert(tx *world.Tx) {
+	tx.BuildStructure(s.base, &structureRevert{d: s.d, m: s.m})
 }
 
 // structureRevert represents a structure that handles the reverting of a normal structure.

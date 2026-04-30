@@ -18,7 +18,7 @@ type Replace struct {
 
 // At always returns a random block set in the action if the block at the given x, y and z is in the
 // old slice.
-func (r Replace) At(x int, y int, z int, ra *rand.Rand, _ *world.World, at func(x, y, z int) world.Block) (world.Block, world.Liquid) {
+func (r Replace) At(x int, y int, z int, ra *rand.Rand, _ *world.Tx, at func(x, y, z int) world.Block) (world.Block, world.Liquid) {
 	old := at(x, y, z)
 	for _, s := range r.old {
 		if s == old {
@@ -44,19 +44,29 @@ type replaceForm struct {
 }
 
 // Submit ...
-func (s replaceForm) Submit(submitter form.Submitter) {
+func (s replaceForm) Submit(submitter form.Submitter, tx *world.Tx) {
 	p := submitter.(*player.Player)
 	ph, _ := palette.LookupHandler(p)
 	pal, ok := ph.Palette(s.BlockPalette.Value())
-	if !ok || len(pal.Blocks()) == 0 {
+	if !ok {
+		p.Message(text.Colourf("<red>%v</red>", msg.InvalidPalette))
+		return
+	}
+	blocks := pal.Blocks(tx)
+	if len(blocks) == 0 {
 		p.Message(text.Colourf("<red>%v</red>", msg.InvalidPalette))
 		return
 	}
 	rPal, ok := ph.Palette(s.ReplacedPalette.Value())
-	if !ok || len(rPal.Blocks()) == 0 {
+	if !ok {
+		p.Message(text.Colourf("<red>%v</red>", msg.InvalidPalette))
+		return
+	}
+	replaced := rPal.Blocks(tx)
+	if len(replaced) == 0 {
 		p.Message(text.Colourf("<red>%v</red>", msg.InvalidPalette))
 		return
 	}
 	held, otherHeld := p.HeldItems()
-	p.SetHeldItems(brush.New(s.s, Replace{b: pal.Blocks(), old: rPal.Blocks()}).Bind(held), otherHeld)
+	p.SetHeldItems(brush.New(s.s, Replace{b: blocks, old: replaced}).Bind(held), otherHeld)
 }

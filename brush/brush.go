@@ -1,6 +1,10 @@
 package brush
 
 import (
+	"iter"
+	"reflect"
+	"sync"
+
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/block/cube/trace"
 	"github.com/df-mc/dragonfly/server/item"
@@ -9,8 +13,6 @@ import (
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/google/uuid"
 	"github.com/sandertv/gophertunnel/minecraft/text"
-	"reflect"
-	"sync"
 )
 
 var brushes sync.Map
@@ -39,7 +41,7 @@ func (b Brush) UUID() uuid.UUID {
 
 var bb = cube.Box(-0.125, -0.125, -0.125, 0.125, 0.125, 0.125)
 
-func (b Brush) Use(p *player.Player) {
+func (b Brush) Use(p *player.Player, tx *world.Tx) {
 	const (
 		maxDistance  = 128
 		maxUndoCount = 40
@@ -48,17 +50,32 @@ func (b Brush) Use(p *player.Player) {
 	pos := p.Position().Add(mgl64.Vec3{0, p.EyeHeight()})
 
 	final := pos.Add(vec)
-	if res, ok := trace.Perform(pos, final, p.World(), bb, func(w world.Entity) bool { return w == p }); ok {
+	if res, ok := trace.Perform(pos, final, tx, bb, withoutPlayer(p)); ok {
 		final = res.Position()
 	}
 
 	h, _ := LookupHandler(p)
-	revert := Perform(cube.PosFromVec3(final), b.s, b.a, p.World())
+	revert := Perform(cube.PosFromVec3(final), b.s, b.a, tx)
 	if len(h.undo) == maxUndoCount {
 		h.undo = append(h.undo[1:], revert)
 		return
 	}
 	h.undo = append(h.undo, revert)
+}
+
+func withoutPlayer(p *player.Player) trace.EntityFilter {
+	return func(seq iter.Seq[world.Entity]) iter.Seq[world.Entity] {
+		return func(yield func(world.Entity) bool) {
+			for e := range seq {
+				if e == p {
+					continue
+				}
+				if !yield(e) {
+					return
+				}
+			}
+		}
+	}
 }
 
 // Bind binds the Brush to the item.Stack i passed and returns a new item.Stack with the Brush bound to it.

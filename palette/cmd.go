@@ -3,6 +3,7 @@ package palette
 import (
 	"github.com/df-mc/dragonfly/server/cmd"
 	"github.com/df-mc/dragonfly/server/player"
+	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/internal/msg"
 	"github.com/sandertv/gophertunnel/minecraft/text"
 )
@@ -15,12 +16,12 @@ type SetCommand struct {
 }
 
 // Run enables palette selection for the *player.Player that runs the command.
-func (c SetCommand) Run(src cmd.Source, o *cmd.Output) {
+func (c SetCommand) Run(src cmd.Source, o *cmd.Output, _ *world.Tx) {
 	p := src.(*player.Player)
 
 	h, _ := LookupHandler(p)
 	h.selecting = 2
-	o.Printf(text.Colourf("<green>%v</green>", msg.StartPaletteSelection))
+	o.Print(text.Colourf("<green>%v</green>", msg.StartPaletteSelection))
 }
 
 // SaveCommand implements the saving of palettes to disk, so that they may be re-used.
@@ -34,7 +35,7 @@ type SaveCommand struct {
 
 // Run allows a *player.Player to save the Selection previously created using /palette to disk with a specific name,
 // so that it can be re-used.
-func (s SaveCommand) Run(src cmd.Source, o *cmd.Output) {
+func (s SaveCommand) Run(src cmd.Source, o *cmd.Output, tx *world.Tx) {
 	p := src.(*player.Player)
 
 	h, _ := LookupHandler(p)
@@ -48,7 +49,7 @@ func (s SaveCommand) Run(src cmd.Source, o *cmd.Output) {
 		o.Errorf(msg.NoPaletteSelected)
 		return
 	}
-	h.palettes.Store(s.Name, NewBlocks(h.m.Blocks()))
+	h.palettes.Store(s.Name, NewBlocks(h.m.Blocks(tx)))
 	o.Printf(text.Colourf("<green>%v</green>", msg.PaletteSaved), h.m.Min, h.m.Max, s.Name)
 }
 
@@ -62,7 +63,7 @@ type DeleteCommand struct {
 }
 
 // Run allows a *player.Player to delete a palette previously saved using /palette save.
-func (d DeleteCommand) Run(src cmd.Source, o *cmd.Output) {
+func (d DeleteCommand) Run(src cmd.Source, o *cmd.Output, _ *world.Tx) {
 	p := src.(*player.Player)
 	name := string(d.Name)
 

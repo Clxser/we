@@ -3,7 +3,6 @@ package palette
 import (
 	"fmt"
 	"github.com/df-mc/dragonfly/server/block/cube"
-	"github.com/df-mc/dragonfly/server/event"
 	"github.com/df-mc/dragonfly/server/item"
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/we/internal/msg"
@@ -59,12 +58,12 @@ func (h *Handler) Palette(name string) (Palette, bool) {
 }
 
 // HandleItemUseOnBlock handles selection of a block for the palette.
-func (h *Handler) HandleItemUseOnBlock(ctx *event.Context, pos cube.Pos, _ cube.Face, _ mgl64.Vec3) {
+func (h *Handler) HandleItemUseOnBlock(ctx *player.Context, pos cube.Pos, _ cube.Face, _ mgl64.Vec3) {
 	h.handleSelection(ctx, pos)
 }
 
 // HandleBlockBreak handles selection of a block for the palette.
-func (h *Handler) HandleBlockBreak(ctx *event.Context, pos cube.Pos, _ *[]item.Stack) {
+func (h *Handler) HandleBlockBreak(ctx *player.Context, pos cube.Pos, _ *[]item.Stack, _ *int) {
 	h.handleSelection(ctx, pos)
 }
 
@@ -77,7 +76,7 @@ func (h *Handler) HandleQuit() {
 // handleSelection handles the selection of a point for a palette. If no palette is currently being selected,
 // handleSelection returns immediately. If the second point was selected, the palette is finalised and
 // stored with the name "M".
-func (h *Handler) handleSelection(ctx *event.Context, pos cube.Pos) {
+func (h *Handler) handleSelection(ctx *player.Context, pos cube.Pos) {
 	if h.selecting == 0 {
 		// Not currently selecting, return immediately.
 		return
@@ -93,7 +92,7 @@ func (h *Handler) handleSelection(ctx *event.Context, pos cube.Pos) {
 	}
 	// First point was selected, we now have a second point so we can create a palette.
 	h.p.Message(fmt.Sprintf(msg.SecondPointSelected, pos))
-	h.m = NewSelection(h.first, pos, h.p.World())
+	h.m = NewSelection(h.first, pos, h.p.Tx().World())
 	h.p.Message(text.Colourf("<green>"+msg.PaletteCreated+"</green>", h.m.Min, h.m.Max))
 }
 
@@ -126,7 +125,8 @@ func (h *Handler) visualisePalette() {
 					i++
 				}
 				if i > 1 {
-					// TODO: Spawn particles.
+					// Palette outline visualisation is intentionally a no-op until
+					// Dragonfly exposes a stable particle API for this use.
 				}
 			})
 		case <-h.close:

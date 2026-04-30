@@ -3,6 +3,7 @@ package brush
 import (
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/player/form"
+	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/internal/msg"
 )
 
@@ -25,7 +26,7 @@ type SelectionForm struct {
 }
 
 // Submit ...
-func (s SelectionForm) Submit(submitter form.Submitter) {
+func (s SelectionForm) Submit(submitter form.Submitter, _ *world.Tx) {
 	p := submitter.(*player.Player)
 
 	shape, action := shapeByName(shapeNames[s.Shape.Value()], int(s.Radius.Value())), actionByName(actionNames[s.Action.Value()])

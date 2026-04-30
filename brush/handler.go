@@ -1,8 +1,8 @@
 package brush
 
 import (
-	"github.com/df-mc/dragonfly/server/event"
 	"github.com/df-mc/dragonfly/server/player"
+	"github.com/df-mc/dragonfly/server/world"
 	"sync"
 )
 
@@ -20,7 +20,7 @@ func LookupHandler(p *player.Player) (*Handler, bool) {
 // undo/redo those actions.
 type Handler struct {
 	p    *player.Player
-	undo []func()
+	undo []func(*world.Tx)
 }
 
 // NewHandler creates a new Handler for the *player.Player passed.
@@ -31,22 +31,22 @@ func NewHandler(p *player.Player) *Handler {
 }
 
 // UndoLatest undoes the latest brush action. If no action was left to undo, false is returned.
-func (h *Handler) UndoLatest() bool {
+func (h *Handler) UndoLatest(tx *world.Tx) bool {
 	if len(h.undo) == 0 {
 		return false
 	}
 	offset := len(h.undo) - 1
-	h.undo[offset]()
+	h.undo[offset](tx)
 	h.undo = h.undo[:offset]
 	return true
 }
 
 // HandleItemUse activates the brush on a player's item if present.
-func (h *Handler) HandleItemUse(ctx *event.Context) {
+func (h *Handler) HandleItemUse(ctx *player.Context) {
 	held, _ := h.p.HeldItems()
 	if b, ok := find(held); ok {
 		ctx.Cancel()
-		go b.Use(h.p)
+		b.Use(h.p, h.p.Tx())
 	}
 }
 
