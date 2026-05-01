@@ -13,8 +13,11 @@ import (
 	"github.com/df-mc/we/parse"
 )
 
+// DefaultSchematicDirectory is the default on-disk folder for //schematic JSON files.
+const DefaultSchematicDirectory = ".we-schematics"
+
 // SchematicDirectory is the on-disk folder for //schematic JSON files (overridable in tests).
-var SchematicDirectory = ".we-schematics"
+var SchematicDirectory = DefaultSchematicDirectory
 
 type schematicFile struct {
 	OriginDir string           `json:"origin_dir"`

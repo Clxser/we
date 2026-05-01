@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const defaultHistoryLimit = 40
+const DefaultHistoryLimit = 40
 
 // Session contains per-player world-edit state.
 type Session struct {
@@ -51,12 +51,18 @@ func Lookup(p *player.Player) (*Session, bool) {
 	return s, ok
 }
 
-// Ensure returns the session for p, creating one if needed.
+// Ensure returns the session for p, creating one with the default history limit if needed.
 func Ensure(p *player.Player) *Session {
+	return EnsureWithHistoryLimit(p, DefaultHistoryLimit)
+}
+
+// EnsureWithHistoryLimit returns the session for p, creating one with the
+// history limit passed if needed. Existing sessions keep their current history.
+func EnsureWithHistoryLimit(p *player.Player, historyLimit int) *Session {
 	if s, ok := Lookup(p); ok {
 		return s
 	}
-	s := &Session{p: p, history: history.NewHistory(defaultHistoryLimit)}
+	s := &Session{p: p, history: history.NewHistory(historyLimit)}
 	sessions.Store(key(p), s)
 	return s
 }

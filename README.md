@@ -24,6 +24,21 @@ Keep new features in that shape: add reusable block mutation logic to `edit`,
 coordinate user-facing operations through `service`, store player state through
 `session`, and keep Dragonfly command/form code thin.
 
+## Configuration
+
+`we.NewHandler` accepts optional Go configuration. Defaults preserve existing
+behavior: 40 history entries per stack, `.we-schematics` for schematic files,
+and a 128-block brush raycast distance. Guardrail fields default to `0`, which
+means unlimited and is reserved for opt-in safety limits.
+
+```go
+p.Handle(we.NewHandler(p,
+	we.WithHistoryLimit(100),
+	we.WithSchematicDirectory("schematics"),
+	we.WithBrushMaxDistance(96),
+))
+```
+
 ## Selection
 
 Most edits need two corners of an axis-aligned box.
