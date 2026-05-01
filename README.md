@@ -4,6 +4,23 @@ World editing library for [Dragonfly](https://github.com/df-mc/dragonfly). Impor
 
 On Bedrock, WorldEdit-style commands are typed with a double slash (`//set`, `//copy`, …). Dragonfly strips one leading slash so the registered names are `/set`, `/copy`, etc.
 
+## Architecture
+
+The project follows a lightweight hexagonal split rather than a heavy DDD/onion
+framework:
+
+- `edit`, `geo`, `history`, and `parse` are the core domain packages. They do
+  block geometry, reversible edits, and block-state parsing without command or
+  form dependencies.
+- `session` owns per-player application state: selections, clipboard, and undo
+  stacks.
+- `cmd`, `handler.go`, `editbrush`, `palette`, and legacy `brush`/`act` code are
+  Dragonfly adapters. They translate player commands, forms, item metadata, and
+  events into core edit operations.
+
+Keep new features in that shape: add reusable block mutation logic to `edit`,
+store player state through `session`, and keep Dragonfly command/form code thin.
+
 ## Selection
 
 Most edits need two corners of an axis-aligned box.

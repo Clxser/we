@@ -17,30 +17,36 @@ import (
 
 var brushes sync.Map
 
+// Lookup returns the Brush registered under id.
 func Lookup(id uuid.UUID) (*Brush, bool) {
 	v, _ := brushes.Load(id)
 	h, ok := v.(*Brush)
 	return h, ok
 }
 
+// Brush couples a Shape with an Action. Use it via Bind to attach to an item stack.
 type Brush struct {
 	s  Shape
 	a  Action
 	id uuid.UUID
 }
 
+// New creates a Brush from a Shape and Action and registers it for later Lookup.
 func New(s Shape, a Action) Brush {
 	b := Brush{s: s, a: a, id: uuid.New()}
 	brushes.Store(b.id, b)
 	return b
 }
 
+// UUID returns the brush's stable identifier.
 func (b Brush) UUID() uuid.UUID {
 	return b.id
 }
 
 var bb = cube.Box(-0.125, -0.125, -0.125, 0.125, 0.125, 0.125)
 
+// Use raycasts from the player's eyes and applies the brush at the hit position,
+// pushing a revert function onto the player's brush undo stack.
 func (b Brush) Use(p *player.Player, tx *world.Tx) {
 	const (
 		maxDistance  = 128
@@ -91,8 +97,16 @@ func Unbind(i item.Stack) item.Stack {
 
 // find looks for a Brush bound to the item.Stack passed and returns it if one was found.
 func find(i item.Stack) (Brush, bool) {
-	if id, ok := i.Value("brush"); ok {
-		if b, ok := brushes.Load(uuid.MustParse(id.(string))); ok {
+	if raw, ok := i.Value("brush"); ok {
+		id, ok := raw.(string)
+		if !ok {
+			return Brush{}, false
+		}
+		uid, err := uuid.Parse(id)
+		if err != nil {
+			return Brush{}, false
+		}
+		if b, ok := brushes.Load(uid); ok {
 			return b.(Brush), true
 		}
 	}

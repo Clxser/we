@@ -2,14 +2,14 @@ package palette
 
 import (
 	"fmt"
+	"sync"
+
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/item"
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/we/internal/msg"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/sandertv/gophertunnel/minecraft/text"
-	"sync"
-	"time"
 )
 
 // handlers stores all Handler values for players currently online.
@@ -37,7 +37,6 @@ type Handler struct {
 // NewHandler creates a Handler for the *player.Player passed.
 func NewHandler(p *player.Player) *Handler {
 	h := &Handler{p: p, close: make(chan struct{})}
-	go h.visualisePalette()
 	handlers.Store(p, h)
 	return h
 }
@@ -94,43 +93,4 @@ func (h *Handler) handleSelection(ctx *player.Context, pos cube.Pos) {
 	h.p.Message(fmt.Sprintf(msg.SecondPointSelected, pos))
 	h.m = NewSelection(h.first, pos, h.p.Tx().World())
 	h.p.Message(text.Colourf("<green>"+msg.PaletteCreated+"</green>", h.m.Min, h.m.Max))
-}
-
-// visualisePalette continuously visualises the palette through particles in the world.
-func (h *Handler) visualisePalette() {
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
-
-	unit := cube.Pos{1, 1, 1}
-	for {
-		select {
-		case <-t.C:
-			p, _ := h.Palette("m")
-			m := p.(Selection)
-
-			if m.Zero() {
-				continue
-			}
-			a := m.Area
-			a.Min = a.Min.Sub(unit)
-			a.Range(func(x, y, z int) {
-				i := 0
-				if x == a.Min[0] || x == a.Max[0] {
-					i++
-				}
-				if y == a.Min[1] || y == a.Max[1] {
-					i++
-				}
-				if z == a.Min[2] || z == a.Max[2] {
-					i++
-				}
-				if i > 1 {
-					// Palette outline visualisation is intentionally a no-op until
-					// Dragonfly exposes a stable particle API for this use.
-				}
-			})
-		case <-h.close:
-			return
-		}
-	}
 }

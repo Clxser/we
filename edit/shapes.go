@@ -2,7 +2,6 @@ package edit
 
 import (
 	"math"
-	"math/rand"
 	"strings"
 
 	"github.com/df-mc/dragonfly/server/block/cube"
@@ -11,8 +10,10 @@ import (
 	"github.com/df-mc/we/history"
 )
 
+// ShapeKind names the supported shape primitives.
 type ShapeKind string
 
+// Supported shape kinds.
 const (
 	ShapeSphere   ShapeKind = "sphere"
 	ShapeCylinder ShapeKind = "cylinder"
@@ -21,6 +22,9 @@ const (
 	ShapeCube     ShapeKind = "cube"
 )
 
+// ShapeSpec describes a shape's dimensions. Which fields are used depends on Kind:
+// sphere/cylinder/cone use Radius and Height; pyramid/cube use Length, Width, Height.
+// Hollow restricts placement to the shell.
 type ShapeSpec struct {
 	Kind          ShapeKind
 	Radius        int
@@ -29,6 +33,7 @@ type ShapeSpec struct {
 	Hollow        bool
 }
 
+// Bounds returns the inclusive cuboid that contains the shape when centred at anchor.
 func (s ShapeSpec) Bounds(anchor cube.Pos) geo.Area {
 	switch s.Kind {
 	case ShapeSphere:
@@ -45,11 +50,13 @@ func (s ShapeSpec) Bounds(anchor cube.Pos) geo.Area {
 	}
 }
 
+// Inside reports whether pos lies within the solid volume of the shape at anchor.
 func (s ShapeSpec) Inside(anchor, pos cube.Pos) bool {
 	inside, _ := s.insideShell(anchor, pos)
 	return inside
 }
 
+// Shell reports whether pos lies on the outer one-block-thick shell of the shape.
 func (s ShapeSpec) Shell(anchor, pos cube.Pos) bool {
 	inside, shell := s.insideShell(anchor, pos)
 	return inside && shell
@@ -131,9 +138,9 @@ func posInInclusiveBox(p, min, max cube.Pos) bool {
 		p[2] >= min[2] && p[2] <= max[2]
 }
 
+// ApplyShape writes blocks at every position inside (or on the shell of) spec around anchor.
 func ApplyShape(tx *world.Tx, anchor cube.Pos, spec ShapeSpec, blocks []world.Block, batch *history.Batch) {
 	area := spec.Bounds(anchor)
-	r := rand.New(rand.NewSource(1))
 	area.Range(func(x, y, z int) {
 		pos := cube.Pos{x, y, z}
 		if spec.Hollow {
@@ -143,7 +150,7 @@ func ApplyShape(tx *world.Tx, anchor cube.Pos, spec ShapeSpec, blocks []world.Bl
 		} else if !spec.Inside(anchor, pos) {
 			return
 		}
-		batch.SetBlock(tx, pos, ChooseBlock(blocks, r))
+		batch.SetBlock(tx, pos, ChooseBlock(blocks, nil))
 	})
 }
 

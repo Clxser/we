@@ -1,10 +1,10 @@
 package brush
 
 import (
+	"math/rand"
+
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
-	"math/rand"
-	"time"
 )
 
 // Perform performs the world edit action passed in a specific shape, in the world that is passed. Perform
@@ -14,7 +14,12 @@ func Perform(pos cube.Pos, s Shape, a Action, tx *world.Tx) (revert func(*world.
 	d := s.Dim()
 	// The shapes measure according to a centre position, so the base of our structure is offset.
 	base := pos.Add(cube.Pos{-d[0] / 2, -d[1] / 2, -d[2] / 2})
-	st := &structure{base: base, s: s, a: a, d: d, tx: tx, cx: pos[0], cy: pos[1], cz: pos[2], m: make(map[cube.Pos]world.Block), r: rand.New(rand.NewSource(time.Now().UnixNano()))}
+	st := &structure{
+		base: base, s: s, a: a, d: d, tx: tx,
+		cx: pos[0], cy: pos[1], cz: pos[2],
+		m: make(map[cube.Pos]world.Block),
+		r: rand.New(rand.NewSource(rand.Int63())),
+	}
 	tx.BuildStructure(base, st)
 	return st.Revert
 }
@@ -80,6 +85,5 @@ func (s *structureRevert) Dimensions() [3]int {
 
 // At ...
 func (s *structureRevert) At(x, y, z int, _ func(x, y, z int) world.Block) (world.Block, world.Liquid) {
-	b, _ := s.m[cube.Pos{x, y, z}]
-	return b, nil
+	return s.m[cube.Pos{x, y, z}], nil
 }

@@ -1,6 +1,8 @@
 package act
 
 import (
+	"math/rand"
+
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/player/form"
 	"github.com/df-mc/dragonfly/server/world"
@@ -8,7 +10,6 @@ import (
 	"github.com/df-mc/we/internal/msg"
 	"github.com/df-mc/we/palette"
 	"github.com/sandertv/gophertunnel/minecraft/text"
-	"math/rand"
 )
 
 // Fill is an action which fills the entire selection with one or more blocks.
@@ -17,8 +18,8 @@ type Fill struct {
 }
 
 // At always returns a random block set in the action.
-func (f Fill) At(_ int, _ int, _ int, r *rand.Rand, _ *world.Tx, _ func(x, y, z int) world.Block) (world.Block, world.Liquid) {
-	return f.b[r.Intn(len(f.b))], nil
+func (f Fill) At(_ int, _ int, _ int, _ *rand.Rand, _ *world.Tx, _ func(x, y, z int) world.Block) (world.Block, world.Liquid) {
+	return f.b[rand.Intn(len(f.b))], nil
 }
 
 // Form ...

@@ -34,7 +34,11 @@ func (a setBlockAction) Form(brush.Shape) form.Form {
 func TestPerformRevertRestoresChangedBlocks(t *testing.T) {
 	finaliseBlockRegistry()
 	w := world.Config{RandomTickSpeed: -1, SaveInterval: -1}.New()
-	defer w.Close()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Fatalf("close world: %v", err)
+		}
+	}()
 
 	var failures []string
 	<-w.Exec(func(tx *world.Tx) {

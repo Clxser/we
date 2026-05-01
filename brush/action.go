@@ -1,9 +1,10 @@
 package brush
 
 import (
+	"math/rand"
+
 	"github.com/df-mc/dragonfly/server/player/form"
 	"github.com/df-mc/dragonfly/server/world"
-	"math/rand"
 )
 
 // Action is a brush action that may be performed on all blocks in a Shape through a call to Perform.

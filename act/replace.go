@@ -1,6 +1,8 @@
 package act
 
 import (
+	"math/rand"
+
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/player/form"
 	"github.com/df-mc/dragonfly/server/world"
@@ -8,7 +10,6 @@ import (
 	"github.com/df-mc/we/internal/msg"
 	"github.com/df-mc/we/palette"
 	"github.com/sandertv/gophertunnel/minecraft/text"
-	"math/rand"
 )
 
 // Replace is an action that replaces set blocks in the selection with other blocks.
@@ -18,11 +19,11 @@ type Replace struct {
 
 // At always returns a random block set in the action if the block at the given x, y and z is in the
 // old slice.
-func (r Replace) At(x int, y int, z int, ra *rand.Rand, _ *world.Tx, at func(x, y, z int) world.Block) (world.Block, world.Liquid) {
+func (r Replace) At(x int, y int, z int, _ *rand.Rand, _ *world.Tx, at func(x, y, z int) world.Block) (world.Block, world.Liquid) {
 	old := at(x, y, z)
 	for _, s := range r.old {
 		if s == old {
-			return r.b[ra.Intn(len(r.b))], nil
+			return r.b[rand.Intn(len(r.b))], nil
 		}
 	}
 	return nil, nil

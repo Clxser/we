@@ -43,6 +43,7 @@ func schematicPath(name string) (string, error) {
 	return filepath.Join(SchematicDirectory, name+".json"), nil
 }
 
+// SaveSchematic writes cb to disk under name. Names are restricted to [A-Za-z0-9_.-].
 func SaveSchematic(name string, cb *Clipboard) error {
 	if cb == nil || len(cb.Entries) == 0 {
 		return fmt.Errorf("selection is empty")
@@ -69,6 +70,7 @@ func SaveSchematic(name string, cb *Clipboard) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
+// LoadSchematic reads a previously saved schematic into a Clipboard.
 func LoadSchematic(name string) (*Clipboard, error) {
 	path, err := schematicPath(name)
 	if err != nil {
@@ -106,6 +108,7 @@ func LoadSchematic(name string) (*Clipboard, error) {
 	return cb, nil
 }
 
+// DeleteSchematic removes a saved schematic file.
 func DeleteSchematic(name string) error {
 	path, err := schematicPath(name)
 	if err != nil {
@@ -114,6 +117,7 @@ func DeleteSchematic(name string) error {
 	return os.Remove(path)
 }
 
+// ListSchematics returns saved schematic names in alphabetical order.
 func ListSchematics() ([]string, error) {
 	entries, err := os.ReadDir(SchematicDirectory)
 	if os.IsNotExist(err) {

@@ -14,12 +14,17 @@ import (
 	"github.com/df-mc/we/parse"
 )
 
+// BlockMask filters blocks for replace, move, and similar operations.
+//
+// All matches every block; IncludeAir lets air count as a match. Blocks holds
+// explicit block types when neither flag is set (the "only:..." form).
 type BlockMask struct {
 	All        bool
 	IncludeAir bool
 	Blocks     []world.Block
 }
 
+// Match reports whether b satisfies the mask.
 func (m BlockMask) Match(b world.Block) bool {
 	if m.All {
 		return m.IncludeAir || !parse.IsAir(b)
@@ -43,6 +48,7 @@ func (m BlockMask) Match(b world.Block) bool {
 	return false
 }
 
+// ParseMask parses a mask spec like "all" or "only:stone,dirt" into a BlockMask.
 func ParseMask(spec string) (BlockMask, error) {
 	spec = strings.TrimSpace(spec)
 	if strings.EqualFold(spec, "all") {
@@ -61,16 +67,20 @@ func ChooseBlock(blocks []world.Block, r *rand.Rand) world.Block {
 	if len(blocks) == 1 {
 		return blocks[0]
 	}
+	if r == nil {
+		return blocks[rand.Intn(len(blocks))]
+	}
 	return blocks[r.Intn(len(blocks))]
 }
 
+// FillArea sets every block in area to a random pick from blocks.
 func FillArea(tx *world.Tx, area geo.Area, blocks []world.Block, batch *history.Batch) {
-	r := rand.New(rand.NewSource(1))
 	area.Range(func(x, y, z int) {
-		batch.SetBlock(tx, cube.Pos{x, y, z}, ChooseBlock(blocks, r))
+		batch.SetBlock(tx, cube.Pos{x, y, z}, ChooseBlock(blocks, nil))
 	})
 }
 
+// ClearArea replaces every block in area with air and removes any liquid layer.
 func ClearArea(tx *world.Tx, area geo.Area, batch *history.Batch) {
 	area.Range(func(x, y, z int) {
 		pos := cube.Pos{x, y, z}
@@ -79,39 +89,40 @@ func ClearArea(tx *world.Tx, area geo.Area, batch *history.Batch) {
 	})
 }
 
+// Center places one block at the integer-rounded centre of area and returns the position.
 func Center(tx *world.Tx, area geo.Area, blocks []world.Block, batch *history.Batch) cube.Pos {
 	pos := cube.Pos{
 		(area.Min[0] + area.Max[0]) / 2,
 		(area.Min[1] + area.Max[1]) / 2,
 		(area.Min[2] + area.Max[2]) / 2,
 	}
-	batch.SetBlock(tx, pos, ChooseBlock(blocks, rand.New(rand.NewSource(1))))
+	batch.SetBlock(tx, pos, ChooseBlock(blocks, nil))
 	return pos
 }
 
+// Walls fills only the outer shell of area's cuboid.
 func Walls(tx *world.Tx, area geo.Area, blocks []world.Block, batch *history.Batch) {
-	r := rand.New(rand.NewSource(1))
 	area.Range(func(x, y, z int) {
 		if x == area.Min[0] || x == area.Max[0] || y == area.Min[1] || y == area.Max[1] || z == area.Min[2] || z == area.Max[2] {
-			batch.SetBlock(tx, cube.Pos{x, y, z}, ChooseBlock(blocks, r))
+			batch.SetBlock(tx, cube.Pos{x, y, z}, ChooseBlock(blocks, nil))
 		}
 	})
 }
 
+// ReplaceArea swaps blocks matching mask inside area for picks from to.
 func ReplaceArea(tx *world.Tx, area geo.Area, mask BlockMask, to []world.Block, batch *history.Batch) {
-	r := rand.New(rand.NewSource(1))
 	area.Range(func(x, y, z int) {
 		pos := cube.Pos{x, y, z}
 		if mask.Match(tx.Block(pos)) {
-			batch.SetBlock(tx, pos, ChooseBlock(to, r))
+			batch.SetBlock(tx, pos, ChooseBlock(to, nil))
 		}
 	})
 }
 
+// ReplaceNear runs ReplaceArea inside a sphere of the given radius around center.
 func ReplaceNear(tx *world.Tx, center cube.Pos, radius int, mask BlockMask, to []world.Block, batch *history.Batch) {
 	r2 := radius * radius
 	area := geo.NewArea(center[0]-radius, center[1]-radius, center[2]-radius, center[0]+radius, center[1]+radius, center[2]+radius)
-	r := rand.New(rand.NewSource(1))
 	area.Range(func(x, y, z int) {
 		dx, dy, dz := x-center[0], y-center[1], z-center[2]
 		if dx*dx+dy*dy+dz*dz > r2 {
@@ -119,13 +130,13 @@ func ReplaceNear(tx *world.Tx, center cube.Pos, radius int, mask BlockMask, to [
 		}
 		pos := cube.Pos{x, y, z}
 		if mask.Match(tx.Block(pos)) {
-			batch.SetBlock(tx, pos, ChooseBlock(to, r))
+			batch.SetBlock(tx, pos, ChooseBlock(to, nil))
 		}
 	})
 }
 
+// TopLayer replaces only the topmost matching block in each (x, z) column of area.
 func TopLayer(tx *world.Tx, area geo.Area, mask BlockMask, to []world.Block, batch *history.Batch) {
-	r := rand.New(rand.NewSource(1))
 	for x := area.Min[0]; x <= area.Max[0]; x++ {
 		for z := area.Min[2]; z <= area.Max[2]; z++ {
 			for y := area.Max[1]; y >= area.Min[1]; y-- {
@@ -135,7 +146,7 @@ func TopLayer(tx *world.Tx, area geo.Area, mask BlockMask, to []world.Block, bat
 					continue
 				}
 				if mask.Match(b) {
-					batch.SetBlock(tx, pos, ChooseBlock(to, r))
+					batch.SetBlock(tx, pos, ChooseBlock(to, nil))
 				}
 				break
 			}
@@ -143,8 +154,8 @@ func TopLayer(tx *world.Tx, area geo.Area, mask BlockMask, to []world.Block, bat
 	}
 }
 
+// Overlay places blocks on top of the highest non-air block in each column.
 func Overlay(tx *world.Tx, area geo.Area, blocks []world.Block, batch *history.Batch) {
-	r := rand.New(rand.NewSource(1))
 	for x := area.Min[0]; x <= area.Max[0]; x++ {
 		for z := area.Min[2]; z <= area.Max[2]; z++ {
 			for y := area.Max[1]; y >= area.Min[1]; y-- {
@@ -154,7 +165,7 @@ func Overlay(tx *world.Tx, area geo.Area, blocks []world.Block, batch *history.B
 				}
 				above := cube.Pos{x, y + 1, z}
 				if above[1] <= area.Max[1] && parse.IsAir(tx.Block(above)) {
-					batch.SetBlock(tx, above, ChooseBlock(blocks, r))
+					batch.SetBlock(tx, above, ChooseBlock(blocks, nil))
 				}
 				break
 			}
@@ -162,6 +173,7 @@ func Overlay(tx *world.Tx, area geo.Area, blocks []world.Block, batch *history.B
 	}
 }
 
+// Drain removes water and lava blocks (and standalone liquid layers) within a sphere.
 func Drain(tx *world.Tx, center cube.Pos, radius int, batch *history.Batch) {
 	r2 := radius * radius
 	area := geo.NewArea(center[0]-radius, center[1]-radius, center[2]-radius, center[0]+radius, center[1]+radius, center[2]+radius)
@@ -236,10 +248,8 @@ func DirectionVector(face cube.Face) cube.Pos {
 	}
 }
 
-func lookFace(rot interface{ Direction() cube.Direction }) cube.Face {
-	return rot.Direction().Face()
-}
-
+// Move shifts blocks matching mask by dist along dir, clearing the source.
+// If noAir is true, source positions whose block is air are not written at the destination.
 func Move(tx *world.Tx, area geo.Area, dir cube.Pos, dist int, mask BlockMask, noAir bool, batch *history.Batch) {
 	entries := copyArea(tx, area, area.Min, mask, mask.All)
 	sort.Slice(entries, func(i, j int) bool {
@@ -255,6 +265,7 @@ func Move(tx *world.Tx, area geo.Area, dir cube.Pos, dist int, mask BlockMask, n
 	pasteBuffer(tx, dest, entries, noAir, batch)
 }
 
+// Stack repeats area amount times along dir, advancing one full area-length per copy.
 func Stack(tx *world.Tx, area geo.Area, dir cube.Pos, amount int, noAir bool, batch *history.Batch) {
 	entries := copyArea(tx, area, area.Min, BlockMask{All: true, IncludeAir: true}, true)
 	step := cube.Pos{dir[0] * area.Dx(), dir[1] * area.Dy(), dir[2] * area.Dz()}
@@ -271,6 +282,7 @@ func Stack(tx *world.Tx, area geo.Area, dir cube.Pos, amount int, noAir bool, ba
 	}
 }
 
+// RotateCopy rotates blocks inside area in place by degrees around axis (x, y, or z).
 func RotateCopy(tx *world.Tx, area geo.Area, degrees int, axis string, batch *history.Batch) {
 	entries := copyArea(tx, area, area.Min, BlockMask{All: true, IncludeAir: true}, true)
 	axis = strings.ToLower(axis)
@@ -293,6 +305,7 @@ func RotateCopy(tx *world.Tx, area geo.Area, degrees int, axis string, batch *hi
 	pasteBuffer(tx, area.Min, entries, false, batch)
 }
 
+// FlipCopy mirrors blocks inside area across axis (x, y, or z).
 func FlipCopy(tx *world.Tx, area geo.Area, axis string, batch *history.Batch) {
 	entries := copyArea(tx, area, area.Min, BlockMask{All: true, IncludeAir: true}, true)
 	for i := range entries {
@@ -310,6 +323,7 @@ func FlipCopy(tx *world.Tx, area geo.Area, axis string, batch *history.Batch) {
 	pasteBuffer(tx, area.Min, entries, false, batch)
 }
 
+// Line draws a 3D Bresenham-style line from start to end with the given block thickness.
 func Line(tx *world.Tx, start, end cube.Pos, thickness int, blocks []world.Block, batch *history.Batch) {
 	if thickness < 1 {
 		thickness = 1
@@ -319,7 +333,6 @@ func Line(tx *world.Tx, start, end cube.Pos, thickness int, blocks []world.Block
 	if steps == 0 {
 		steps = 1
 	}
-	r := rand.New(rand.NewSource(1))
 	minOffset := -(thickness / 2)
 	maxOffset := minOffset + thickness - 1
 	for i := 0; i <= steps; i++ {
@@ -330,7 +343,7 @@ func Line(tx *world.Tx, start, end cube.Pos, thickness int, blocks []world.Block
 		for ox := minOffset; ox <= maxOffset; ox++ {
 			for oy := minOffset; oy <= maxOffset; oy++ {
 				for oz := minOffset; oz <= maxOffset; oz++ {
-					batch.SetBlock(tx, cube.Pos{x + ox, y + oy, z + oz}, ChooseBlock(blocks, r))
+					batch.SetBlock(tx, cube.Pos{x + ox, y + oy, z + oz}, ChooseBlock(blocks, nil))
 				}
 			}
 		}

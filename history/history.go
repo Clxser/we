@@ -113,13 +113,13 @@ type BlockSnapshot struct {
 }
 
 func snapToInternal(s BlockSnapshot) snapshot {
-	return snapshot{Block: s.Block, Liquid: s.Liquid, HasLiq: s.HasLiq, Biome: s.Biome}
+	return snapshot(s)
 }
 
 // SnapshotAtBlock captures current state for undo-aware brush operations.
 func SnapshotAtBlock(tx *world.Tx, pos cube.Pos) BlockSnapshot {
 	s := snapshotAt(tx, pos)
-	return BlockSnapshot{Block: s.Block, Liquid: s.Liquid, HasLiq: s.HasLiq, Biome: s.Biome}
+	return BlockSnapshot(s)
 }
 
 // ApplyBlockSnapshot writes a captured snapshot to the world.

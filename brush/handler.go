@@ -1,9 +1,10 @@
 package brush
 
 import (
+	"sync"
+
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/world"
-	"sync"
 )
 
 // handlers is a map holding handlers of players.
