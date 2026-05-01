@@ -7,10 +7,11 @@ import (
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/edit"
+	"github.com/df-mc/we/guardrail"
 	"github.com/df-mc/we/history"
 )
 
-func applySchematicBrush(tx *world.Tx, target cube.Pos, dir cube.Direction, cfg BrushConfig, store edit.SchematicStore, batch *history.Batch) error {
+func applySchematicBrush(tx *world.Tx, target cube.Pos, dir cube.Direction, cfg BrushConfig, store edit.SchematicStore, limits guardrail.Limits, batch *history.Batch) error {
 	if store == nil {
 		store = edit.DefaultSchematicStore()
 	}
@@ -23,6 +24,9 @@ func applySchematicBrush(tx *world.Tx, target cube.Pos, dir cube.Direction, cfg 
 	}
 	cb, err := store.Load(name)
 	if err != nil {
+		return err
+	}
+	if err := limits.CheckBrushVolume(int64(len(cb.Entries))); err != nil {
 		return err
 	}
 	if cfg.RandomRotation {

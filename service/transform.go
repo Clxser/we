@@ -42,6 +42,9 @@ func Stack(tx *world.Tx, s Session, dir cube.Pos, args []string) (ChangeResult, 
 	if err != nil {
 		return ChangeResult{}, err
 	}
+	if err := guardrailsFor(s).CheckStackCopies(amount); err != nil {
+		return ChangeResult{}, err
+	}
 	area, err := selectedArea(s)
 	if err != nil {
 		return ChangeResult{}, err

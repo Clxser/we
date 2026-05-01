@@ -8,6 +8,7 @@ import (
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/edit"
 	"github.com/df-mc/we/geo"
+	"github.com/df-mc/we/guardrail"
 	"github.com/df-mc/we/history"
 	"github.com/google/uuid"
 )
@@ -22,6 +23,7 @@ type Session struct {
 	selection  Selection
 	clipboard  *edit.Clipboard
 	schematics edit.SchematicStore
+	guardrails guardrail.Limits
 	history    *history.History
 }
 
@@ -69,15 +71,20 @@ func EnsureWithHistoryLimit(p *player.Player, historyLimit int) *Session {
 // EnsureWithSettings returns the session for p, creating one with the passed
 // settings if needed. Existing sessions keep their current history and receive
 // the latest non-nil schematic store.
-func EnsureWithSettings(p *player.Player, historyLimit int, schematics edit.SchematicStore) *Session {
+func EnsureWithSettings(p *player.Player, historyLimit int, schematics edit.SchematicStore, limits ...guardrail.Limits) *Session {
 	if schematics == nil {
 		schematics = edit.DefaultSchematicStore()
 	}
+	guardrails := guardrail.Limits{}
+	if len(limits) > 0 {
+		guardrails = limits[0]
+	}
 	if s, ok := Lookup(p); ok {
 		s.SetSchematicStore(schematics)
+		s.SetGuardrails(guardrails)
 		return s
 	}
-	s := &Session{p: p, schematics: schematics, history: history.NewHistory(historyLimit)}
+	s := &Session{p: p, schematics: schematics, guardrails: guardrails, history: history.NewHistory(historyLimit)}
 	sessions.Store(key(p), s)
 	return s
 }
@@ -149,6 +156,20 @@ func (s *Session) SchematicStore() edit.SchematicStore {
 		return edit.DefaultSchematicStore()
 	}
 	return s.schematics
+}
+
+// SetGuardrails sets opt-in safety limits for expensive operations.
+func (s *Session) SetGuardrails(limits guardrail.Limits) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.guardrails = limits
+}
+
+// Guardrails returns configured safety limits for service operations.
+func (s *Session) Guardrails() guardrail.Limits {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.guardrails
 }
 
 // PosCorners returns pos1 and pos2 when both are set (for //line).
