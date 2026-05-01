@@ -8,6 +8,7 @@ import (
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/edit"
 	"github.com/df-mc/we/geo"
+	"github.com/df-mc/we/guardrail"
 	"github.com/df-mc/we/history"
 	"github.com/df-mc/we/parse"
 )
@@ -67,7 +68,21 @@ func selectedArea(s Session) (geo.Area, error) {
 	if !ok {
 		return geo.Area{}, ErrSelectionRequired
 	}
+	if err := guardrailsFor(s).CheckSelectionVolume(area.Volume()); err != nil {
+		return geo.Area{}, err
+	}
 	return area, nil
+}
+
+type guardedSession interface {
+	Guardrails() guardrail.Limits
+}
+
+func guardrailsFor(s Session) guardrail.Limits {
+	if guarded, ok := s.(guardedSession); ok {
+		return guarded.Guardrails()
+	}
+	return guardrail.Limits{}
 }
 
 func record(s Session, batch *history.Batch) ChangeResult {

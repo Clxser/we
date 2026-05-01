@@ -36,11 +36,16 @@ p.Handle(we.NewHandler(p,
 	we.WithHistoryLimit(100),
 	we.WithSchematicDirectory("schematics"),
 	we.WithBrushMaxDistance(96),
+	we.WithMaxSelectionVolume(1_000_000),
+	we.WithMaxShapeVolume(250_000),
+	we.WithMaxBrushVolume(50_000),
+	we.WithMaxStackCopies(16),
 ))
 ```
 
 Servers that need non-filesystem schematic persistence can provide a custom
-`edit.SchematicStore` with `we.WithSchematicStore(...)`.
+`edit.SchematicStore` with `we.WithSchematicStore(...)`. Leave guardrail options
+at `0` to keep them unlimited.
 
 ## Selection
 

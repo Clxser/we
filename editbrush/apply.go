@@ -8,6 +8,7 @@ import (
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/edit"
+	"github.com/df-mc/we/guardrail"
 	"github.com/df-mc/we/history"
 )
 
@@ -20,11 +21,23 @@ func ApplyBrush(tx *world.Tx, p *player.Player, target cube.Pos, cfg BrushConfig
 // ApplyBrushWithStore dispatches a brush use to the implementation for cfg.Type.
 // target is the raycast hit position. Errors propagate from block parsing or schematic IO.
 func ApplyBrushWithStore(tx *world.Tx, p *player.Player, target cube.Pos, cfg BrushConfig, store edit.SchematicStore, batch *history.Batch) error {
+	return ApplyBrushWithSettings(tx, p, target, cfg, store, guardrail.Limits{}, batch)
+}
+
+// ApplyBrushWithSettings dispatches a brush use with a schematic store and
+// optional safety limits. Zero-valued limits are unlimited.
+func ApplyBrushWithSettings(tx *world.Tx, p *player.Player, target cube.Pos, cfg BrushConfig, store edit.SchematicStore, limits guardrail.Limits, batch *history.Batch) error {
 	blocks, err := cfg.blockList()
 	if err != nil {
 		return err
 	}
-	switch strings.ToLower(cfg.Type) {
+	brushType := strings.ToLower(cfg.Type)
+	if usesBrushShapeVolume(brushType) {
+		if err := limits.CheckBrushVolume(cfg.shapeSpec().Bounds(target).Volume()); err != nil {
+			return err
+		}
+	}
+	switch brushType {
 	case "sphere", "cylinder", "pyramid", "cone", "cube":
 		edit.ApplyShape(tx, target, cfg.shapeSpec(), blocks, batch)
 	case "fill":
@@ -46,7 +59,7 @@ func ApplyBrushWithStore(tx *world.Tx, p *player.Player, target cube.Pos, cfg Br
 	case "terraform":
 		applyTerraform(tx, target, cfg, blocks, batch)
 	case "schematic":
-		return applySchematicBrush(tx, target, p.Rotation().Direction(), cfg, store, batch)
+		return applySchematicBrush(tx, target, p.Rotation().Direction(), cfg, store, limits, batch)
 	case "replace":
 		from, err := cfg.fromList()
 		if err != nil {
@@ -81,4 +94,13 @@ func applyBrushShape(tx *world.Tx, target cube.Pos, cfg BrushConfig, f func(pos 
 		f(pos)
 	})
 	_ = tx
+}
+
+func usesBrushShapeVolume(brushType string) bool {
+	switch brushType {
+	case "sphere", "cylinder", "pyramid", "cone", "cube", "fill", "toplayer", "overlay", "wrap", "paint", "pull", "push", "terraform", "replace":
+		return true
+	default:
+		return false
+	}
 }

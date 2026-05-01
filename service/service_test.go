@@ -3,6 +3,7 @@ package service_test
 import (
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	_ "unsafe"
 
@@ -12,6 +13,7 @@ import (
 	_ "github.com/df-mc/dragonfly/server/world/biome"
 	"github.com/df-mc/we/edit"
 	"github.com/df-mc/we/geo"
+	"github.com/df-mc/we/guardrail"
 	"github.com/df-mc/we/history"
 	"github.com/df-mc/we/parse"
 	"github.com/df-mc/we/service"
@@ -26,6 +28,7 @@ type fakeSession struct {
 	pos1, pos2 cube.Pos
 	hasCorners bool
 	clipboard  *edit.Clipboard
+	guardrails guardrail.Limits
 	history    *history.History
 }
 
@@ -41,6 +44,7 @@ func (s *fakeSession) SetClipboard(c *edit.Clipboard) { s.clipboard = c }
 func (s *fakeSession) Clipboard() (*edit.Clipboard, bool) {
 	return s.clipboard, s.clipboard != nil
 }
+func (s *fakeSession) Guardrails() guardrail.Limits       { return s.guardrails }
 func (s *fakeSession) Record(batch *history.Batch) int    { return s.history.Record(batch) }
 func (s *fakeSession) Undo(tx *world.Tx, brush bool) bool { return s.history.Undo(tx, brush) }
 func (s *fakeSession) Redo(tx *world.Tx, brush bool) bool { return s.history.Redo(tx, brush) }
@@ -121,6 +125,39 @@ func TestCopyPasteNoAirKeepsExistingBlocks(t *testing.T) {
 		}
 		if !parse.SameBlock(tx.Block(cube.Pos{11, 0, 0}), mcblock.Dirt{}) {
 			t.Fatal("air clipboard block overwrote destination despite -a")
+		}
+	})
+}
+
+func TestSelectionGuardrailRejectsLargeSelection(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		s := newFakeSession(geo.NewArea(0, 0, 0, 1, 0, 0))
+		s.guardrails = guardrail.Limits{MaxSelectionVolume: 1}
+		_, err := service.Set(tx, s, "stone")
+		if err == nil || !strings.Contains(err.Error(), "selection volume 2 exceeds limit 1") {
+			t.Fatalf("Set error = %v, want selection limit error", err)
+		}
+	})
+}
+
+func TestShapeGuardrailRejectsLargeShape(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 0, 0))
+		s.guardrails = guardrail.Limits{MaxShapeVolume: 1}
+		_, err := service.Shape(tx, s, cube.Pos{0, 0, 0}, edit.ShapeCube, []string{"stone", "2", "1", "1"})
+		if err == nil || !strings.Contains(err.Error(), "shape volume 2 exceeds limit 1") {
+			t.Fatalf("Shape error = %v, want shape limit error", err)
+		}
+	})
+}
+
+func TestStackGuardrailRejectsTooManyCopies(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 0, 0))
+		s.guardrails = guardrail.Limits{MaxStackCopies: 2}
+		_, err := service.Stack(tx, s, cube.Pos{1, 0, 0}, []string{"3"})
+		if err == nil || !strings.Contains(err.Error(), "stack copies 3 exceeds limit 2") {
+			t.Fatalf("Stack error = %v, want stack copy limit error", err)
 		}
 	})
 }

@@ -2,6 +2,7 @@ package we
 
 import (
 	"github.com/df-mc/we/edit"
+	"github.com/df-mc/we/guardrail"
 	"github.com/df-mc/we/session"
 )
 
@@ -23,7 +24,7 @@ type Config struct {
 	// use through Handler.
 	BrushMaxDistance float64
 
-	// Future guardrails. A value of 0 means unlimited.
+	// Guardrails. A value of 0 means unlimited.
 	MaxSelectionVolume int
 	MaxShapeVolume     int
 	MaxBrushVolume     int
@@ -64,6 +65,15 @@ func newConfig(opts []Option) Config {
 		cfg.BrushMaxDistance = defaultBrushMaxDistance
 	}
 	return cfg
+}
+
+func (c Config) guardrails() guardrail.Limits {
+	return guardrail.Limits{
+		MaxSelectionVolume: c.MaxSelectionVolume,
+		MaxShapeVolume:     c.MaxShapeVolume,
+		MaxBrushVolume:     c.MaxBrushVolume,
+		MaxStackCopies:     c.MaxStackCopies,
+	}
 }
 
 // WithHistoryLimit sets the undo/redo stack cap for sessions created by the

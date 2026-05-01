@@ -51,6 +51,11 @@ func (a Area) Dz() int {
 	return a.Max[2] - a.Min[2] + 1
 }
 
+// Volume returns the number of block positions in the Area.
+func (a Area) Volume() int64 {
+	return int64(a.Dx()) * int64(a.Dy()) * int64(a.Dz())
+}
+
 // Range iterates over all points where Min.X <= X <= Max.X, Min.Y <= Y <= Max.Y,
 // and Min.Z <= Z <= Max.Z and calls f for every X, Y and Z.
 func (a Area) Range(f func(x, y, z int)) {

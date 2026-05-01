@@ -34,7 +34,7 @@ type Handler struct {
 // cmd package is imported (blank import keeps registration tied to using we).
 func NewHandler(p *player.Player, opts ...Option) *Handler {
 	cfg := newConfig(opts)
-	session.EnsureWithSettings(p, cfg.HistoryLimit, cfg.SchematicStore)
+	session.EnsureWithSettings(p, cfg.HistoryLimit, cfg.SchematicStore, cfg.guardrails())
 	return &Handler{p: p, ph: palette.NewHandler(p), cfg: cfg}
 }
 
@@ -111,7 +111,7 @@ func (h *Handler) heldBrush() (editbrush.BrushConfig, bool) {
 
 func (h *Handler) applyBrush(tx *world.Tx, target cube.Pos, cfg editbrush.BrushConfig) {
 	batch := history.NewBatch(true)
-	if err := editbrush.ApplyBrushWithStore(tx, h.p, target, cfg, h.cfg.SchematicStore, batch); err != nil {
+	if err := editbrush.ApplyBrushWithSettings(tx, h.p, target, cfg, h.cfg.SchematicStore, h.cfg.guardrails(), batch); err != nil {
 		h.p.Message(err.Error())
 		return
 	}
