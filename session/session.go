@@ -18,10 +18,11 @@ const DefaultHistoryLimit = 40
 type Session struct {
 	p *player.Player
 
-	mu        sync.Mutex
-	selection Selection
-	clipboard *edit.Clipboard
-	history   *history.History
+	mu         sync.Mutex
+	selection  Selection
+	clipboard  *edit.Clipboard
+	schematics edit.SchematicStore
+	history    *history.History
 }
 
 // Selection is the cuboid corners before normalisation.
@@ -62,7 +63,21 @@ func EnsureWithHistoryLimit(p *player.Player, historyLimit int) *Session {
 	if s, ok := Lookup(p); ok {
 		return s
 	}
-	s := &Session{p: p, history: history.NewHistory(historyLimit)}
+	return EnsureWithSettings(p, historyLimit, edit.DefaultSchematicStore())
+}
+
+// EnsureWithSettings returns the session for p, creating one with the passed
+// settings if needed. Existing sessions keep their current history and receive
+// the latest non-nil schematic store.
+func EnsureWithSettings(p *player.Player, historyLimit int, schematics edit.SchematicStore) *Session {
+	if schematics == nil {
+		schematics = edit.DefaultSchematicStore()
+	}
+	if s, ok := Lookup(p); ok {
+		s.SetSchematicStore(schematics)
+		return s
+	}
+	s := &Session{p: p, schematics: schematics, history: history.NewHistory(historyLimit)}
 	sessions.Store(key(p), s)
 	return s
 }
@@ -113,6 +128,27 @@ func (s *Session) Clipboard() (*edit.Clipboard, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.clipboard, s.clipboard != nil
+}
+
+// SetSchematicStore sets the store used by schematic commands and schematic brushes.
+func (s *Session) SetSchematicStore(store edit.SchematicStore) {
+	if store == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.schematics = store
+}
+
+// SchematicStore returns the configured schematic store, falling back to the
+// default filesystem store when a session was built without one.
+func (s *Session) SchematicStore() edit.SchematicStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.schematics == nil {
+		return edit.DefaultSchematicStore()
+	}
+	return s.schematics
 }
 
 // PosCorners returns pos1 and pos2 when both are set (for //line).

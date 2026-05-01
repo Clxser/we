@@ -10,7 +10,6 @@ import (
 	"github.com/df-mc/dragonfly/server/world"
 	_ "github.com/df-mc/we/act"
 	_ "github.com/df-mc/we/cmd"
-	"github.com/df-mc/we/edit"
 	"github.com/df-mc/we/editbrush"
 	"github.com/df-mc/we/history"
 	"github.com/df-mc/we/keys"
@@ -31,8 +30,7 @@ type Handler struct {
 // cmd package is imported (blank import keeps registration tied to using we).
 func NewHandler(p *player.Player, opts ...Option) *Handler {
 	cfg := newConfig(opts)
-	edit.SchematicDirectory = cfg.SchematicDirectory
-	session.EnsureWithHistoryLimit(p, cfg.HistoryLimit)
+	session.EnsureWithSettings(p, cfg.HistoryLimit, cfg.SchematicStore)
 	return &Handler{p: p, ph: palette.NewHandler(p), cfg: cfg}
 }
 
@@ -93,7 +91,7 @@ func (h *Handler) heldBrush() (editbrush.BrushConfig, bool) {
 
 func (h *Handler) applyBrush(tx *world.Tx, target cube.Pos, cfg editbrush.BrushConfig) {
 	batch := history.NewBatch(true)
-	if err := editbrush.ApplyBrush(tx, h.p, target, cfg, batch); err != nil {
+	if err := editbrush.ApplyBrushWithStore(tx, h.p, target, cfg, h.cfg.SchematicStore, batch); err != nil {
 		h.p.Message(err.Error())
 		return
 	}

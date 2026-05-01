@@ -64,7 +64,10 @@ func Cut(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction) (ChangeRe
 
 // Schematic dispatches the //schematic subcommands: create, paste, delete, list.
 // args[0] selects the subcommand; args[1] is the schematic name when required.
-func Schematic(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, args []string) (SchematicResult, error) {
+func Schematic(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, store edit.SchematicStore, args []string) (SchematicResult, error) {
+	if store == nil {
+		store = edit.DefaultSchematicStore()
+	}
 	if len(args) == 0 {
 		return SchematicResult{}, fmt.Errorf("usage: //schematic <create|paste|delete|list> [name] [-a]")
 	}
@@ -78,7 +81,7 @@ func Schematic(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, arg
 			return SchematicResult{}, err
 		}
 		cb := edit.CopySelection(tx, area, origin, dir, edit.BlockMask{All: true, IncludeAir: true}, false)
-		if err := edit.SaveSchematic(args[1], cb); err != nil {
+		if err := store.Save(args[1], cb); err != nil {
 			return SchematicResult{}, err
 		}
 		return SchematicResult{Name: args[1]}, nil
@@ -86,7 +89,7 @@ func Schematic(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, arg
 		if len(args) < 2 {
 			return SchematicResult{}, fmt.Errorf("schematic paste requires a name")
 		}
-		cb, err := edit.LoadSchematic(args[1])
+		cb, err := store.Load(args[1])
 		if err != nil {
 			return SchematicResult{}, err
 		}
@@ -100,12 +103,12 @@ func Schematic(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, arg
 		if len(args) < 2 {
 			return SchematicResult{}, fmt.Errorf("schematic delete requires a name")
 		}
-		if err := edit.DeleteSchematic(args[1]); err != nil {
+		if err := store.Delete(args[1]); err != nil {
 			return SchematicResult{}, err
 		}
 		return SchematicResult{Name: args[1]}, nil
 	case "list":
-		names, err := edit.ListSchematics()
+		names, err := store.List()
 		if err != nil {
 			return SchematicResult{}, err
 		}

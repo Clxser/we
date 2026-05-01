@@ -15,6 +15,9 @@ func TestDefaultConfigPreservesCurrentDefaults(t *testing.T) {
 	if cfg.SchematicDirectory != edit.DefaultSchematicDirectory {
 		t.Fatalf("SchematicDirectory = %q, want %q", cfg.SchematicDirectory, edit.DefaultSchematicDirectory)
 	}
+	if dir := schematicStoreDir(t, cfg.SchematicStore); dir != edit.DefaultSchematicDirectory {
+		t.Fatalf("SchematicStore dir = %q, want %q", dir, edit.DefaultSchematicDirectory)
+	}
 	if cfg.BrushMaxDistance != defaultBrushMaxDistance {
 		t.Fatalf("BrushMaxDistance = %v, want %v", cfg.BrushMaxDistance, defaultBrushMaxDistance)
 	}
@@ -36,6 +39,9 @@ func TestOptionsOverrideConfig(t *testing.T) {
 	if cfg.HistoryLimit != 99 || cfg.SchematicDirectory != "schems" || cfg.BrushMaxDistance != 64 {
 		t.Fatalf("options did not apply: %+v", cfg)
 	}
+	if dir := schematicStoreDir(t, cfg.SchematicStore); dir != "schems" {
+		t.Fatalf("SchematicStore dir = %q, want schems", dir)
+	}
 	if cfg.MaxSelectionVolume != 1 || cfg.MaxShapeVolume != 2 || cfg.MaxBrushVolume != 3 || cfg.MaxStackCopies != 4 {
 		t.Fatalf("guardrail options did not apply: %+v", cfg)
 	}
@@ -53,7 +59,37 @@ func TestInvalidOptionsFallBackToDefaults(t *testing.T) {
 	if cfg.SchematicDirectory != edit.DefaultSchematicDirectory {
 		t.Fatalf("SchematicDirectory = %q, want default", cfg.SchematicDirectory)
 	}
+	if dir := schematicStoreDir(t, cfg.SchematicStore); dir != edit.DefaultSchematicDirectory {
+		t.Fatalf("SchematicStore dir = %q, want default", dir)
+	}
 	if cfg.BrushMaxDistance != defaultBrushMaxDistance {
 		t.Fatalf("BrushMaxDistance = %v, want default", cfg.BrushMaxDistance)
 	}
+}
+
+func TestWithSchematicStoreOverridesDirectoryStore(t *testing.T) {
+	store := stubSchematicStore{}
+	cfg := newConfig([]Option{
+		WithSchematicDirectory("schems"),
+		WithSchematicStore(store),
+	})
+	if cfg.SchematicStore != store {
+		t.Fatal("custom schematic store was not preserved")
+	}
+}
+
+type stubSchematicStore struct{}
+
+func (stubSchematicStore) Save(string, *edit.Clipboard) error   { return nil }
+func (stubSchematicStore) Load(string) (*edit.Clipboard, error) { return nil, nil }
+func (stubSchematicStore) Delete(string) error                  { return nil }
+func (stubSchematicStore) List() ([]string, error)              { return nil, nil }
+
+func schematicStoreDir(t *testing.T, store edit.SchematicStore) string {
+	t.Helper()
+	fileStore, ok := store.(edit.FileSchematicStore)
+	if !ok {
+		t.Fatalf("SchematicStore type = %T, want edit.FileSchematicStore", store)
+	}
+	return fileStore.Dir
 }

@@ -27,9 +27,9 @@ coordinate user-facing operations through `service`, store player state through
 ## Configuration
 
 `we.NewHandler` accepts optional Go configuration. Defaults preserve existing
-behavior: 40 history entries per stack, `.we-schematics` for schematic files,
-and a 128-block brush raycast distance. Guardrail fields default to `0`, which
-means unlimited and is reserved for opt-in safety limits.
+behavior: 40 history entries per stack, a filesystem schematic store rooted at
+`.we-schematics`, and a 128-block brush raycast distance. Guardrail fields
+default to `0`, which means unlimited and is reserved for opt-in safety limits.
 
 ```go
 p.Handle(we.NewHandler(p,
@@ -38,6 +38,9 @@ p.Handle(we.NewHandler(p,
 	we.WithBrushMaxDistance(96),
 ))
 ```
+
+Servers that need non-filesystem schematic persistence can provide a custom
+`edit.SchematicStore` with `we.WithSchematicStore(...)`.
 
 ## Selection
 
@@ -113,7 +116,8 @@ Use commas for multiple block types in the first argument (e.g. `stone,dirt`).
 
 ### Schematics
 
-Saved files are handled by the library’s schematic storage (see `edit` package).
+Saved files are handled by the configured `edit.SchematicStore`; the default
+implementation writes JSON files under `.we-schematics`.
 
 | Subcommand | Syntax | Description |
 |------------|--------|-------------|

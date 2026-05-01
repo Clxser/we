@@ -11,9 +11,15 @@ import (
 	"github.com/df-mc/we/history"
 )
 
-// ApplyBrush dispatches a brush use to the implementation for cfg.Type.
-// target is the raycast hit position. Errors propagate from block parsing or schematic IO.
+// ApplyBrush dispatches a brush use to the implementation for cfg.Type using
+// the default schematic store.
 func ApplyBrush(tx *world.Tx, p *player.Player, target cube.Pos, cfg BrushConfig, batch *history.Batch) error {
+	return ApplyBrushWithStore(tx, p, target, cfg, edit.DefaultSchematicStore(), batch)
+}
+
+// ApplyBrushWithStore dispatches a brush use to the implementation for cfg.Type.
+// target is the raycast hit position. Errors propagate from block parsing or schematic IO.
+func ApplyBrushWithStore(tx *world.Tx, p *player.Player, target cube.Pos, cfg BrushConfig, store edit.SchematicStore, batch *history.Batch) error {
 	blocks, err := cfg.blockList()
 	if err != nil {
 		return err
@@ -40,7 +46,7 @@ func ApplyBrush(tx *world.Tx, p *player.Player, target cube.Pos, cfg BrushConfig
 	case "terraform":
 		applyTerraform(tx, target, cfg, blocks, batch)
 	case "schematic":
-		return applySchematicBrush(tx, target, p.Rotation().Direction(), cfg, batch)
+		return applySchematicBrush(tx, target, p.Rotation().Direction(), cfg, store, batch)
 	case "replace":
 		from, err := cfg.fromList()
 		if err != nil {

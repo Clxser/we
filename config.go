@@ -14,8 +14,11 @@ type Config struct {
 	// HistoryLimit caps the number of undo/redo batches kept per player stack.
 	HistoryLimit int
 	// SchematicDirectory is the filesystem directory used by the default JSON
-	// schematic helpers.
+	// schematic store.
 	SchematicDirectory string
+	// SchematicStore persists named clipboard schematics. If nil, a filesystem
+	// store rooted at SchematicDirectory is used.
+	SchematicStore edit.SchematicStore
 	// BrushMaxDistance is the maximum raycast distance for item-bound editbrush
 	// use through Handler.
 	BrushMaxDistance float64
@@ -32,9 +35,11 @@ type Option func(*Config)
 
 // DefaultConfig returns behavior-preserving defaults.
 func DefaultConfig() Config {
+	dir := edit.DefaultSchematicDirectory
 	return Config{
 		HistoryLimit:       session.DefaultHistoryLimit,
-		SchematicDirectory: edit.DefaultSchematicDirectory,
+		SchematicDirectory: dir,
+		SchematicStore:     edit.NewFileSchematicStore(dir),
 		BrushMaxDistance:   defaultBrushMaxDistance,
 	}
 }
@@ -52,6 +57,9 @@ func newConfig(opts []Option) Config {
 	if cfg.SchematicDirectory == "" {
 		cfg.SchematicDirectory = edit.DefaultSchematicDirectory
 	}
+	if cfg.SchematicStore == nil {
+		cfg.SchematicStore = edit.NewFileSchematicStore(cfg.SchematicDirectory)
+	}
 	if cfg.BrushMaxDistance <= 0 {
 		cfg.BrushMaxDistance = defaultBrushMaxDistance
 	}
@@ -65,9 +73,20 @@ func WithHistoryLimit(limit int) Option {
 }
 
 // WithSchematicDirectory sets the directory used by the default schematic disk
-// helpers. An empty path keeps the default.
+// store. An empty path keeps the default.
 func WithSchematicDirectory(dir string) Option {
-	return func(c *Config) { c.SchematicDirectory = dir }
+	return func(c *Config) {
+		c.SchematicDirectory = dir
+		if dir != "" {
+			c.SchematicStore = edit.NewFileSchematicStore(dir)
+		}
+	}
+}
+
+// WithSchematicStore sets the store used by schematic commands and schematic
+// brushes. A nil store keeps the default filesystem store.
+func WithSchematicStore(store edit.SchematicStore) Option {
+	return func(c *Config) { c.SchematicStore = store }
 }
 
 // WithBrushMaxDistance sets the maximum raycast distance for item-bound brushes

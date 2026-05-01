@@ -16,8 +16,32 @@ import (
 // DefaultSchematicDirectory is the default on-disk folder for //schematic JSON files.
 const DefaultSchematicDirectory = ".we-schematics"
 
-// SchematicDirectory is the on-disk folder for //schematic JSON files (overridable in tests).
-var SchematicDirectory = DefaultSchematicDirectory
+// SchematicStore persists clipboard schematics by name.
+type SchematicStore interface {
+	Save(name string, cb *Clipboard) error
+	Load(name string) (*Clipboard, error)
+	Delete(name string) error
+	List() ([]string, error)
+}
+
+// FileSchematicStore stores schematic JSON files in a directory.
+type FileSchematicStore struct {
+	Dir string
+}
+
+// NewFileSchematicStore returns a filesystem-backed schematic store. An empty
+// dir keeps DefaultSchematicDirectory.
+func NewFileSchematicStore(dir string) FileSchematicStore {
+	if dir == "" {
+		dir = DefaultSchematicDirectory
+	}
+	return FileSchematicStore{Dir: dir}
+}
+
+// DefaultSchematicStore returns the behavior-preserving filesystem schematic store.
+func DefaultSchematicStore() SchematicStore {
+	return NewFileSchematicStore(DefaultSchematicDirectory)
+}
 
 type schematicFile struct {
 	OriginDir string           `json:"origin_dir"`
@@ -39,19 +63,26 @@ func validateSchematicName(name string) error {
 	return nil
 }
 
-func schematicPath(name string) (string, error) {
+func (s FileSchematicStore) dir() string {
+	if s.Dir == "" {
+		return DefaultSchematicDirectory
+	}
+	return s.Dir
+}
+
+func (s FileSchematicStore) path(name string) (string, error) {
 	if err := validateSchematicName(name); err != nil {
 		return "", err
 	}
-	return filepath.Join(SchematicDirectory, name+".json"), nil
+	return filepath.Join(s.dir(), name+".json"), nil
 }
 
-// SaveSchematic writes cb to disk under name. Names are restricted to [A-Za-z0-9_.-].
-func SaveSchematic(name string, cb *Clipboard) error {
+// Save writes cb to disk under name. Names are restricted to [A-Za-z0-9_.-].
+func (s FileSchematicStore) Save(name string, cb *Clipboard) error {
 	if cb == nil || len(cb.Entries) == 0 {
 		return fmt.Errorf("selection is empty")
 	}
-	path, err := schematicPath(name)
+	path, err := s.path(name)
 	if err != nil {
 		return err
 	}
@@ -63,7 +94,7 @@ func SaveSchematic(name string, cb *Clipboard) error {
 			Liquid: parse.MarshalBlock(e.Liquid, e.HasLiq),
 		})
 	}
-	if err := os.MkdirAll(SchematicDirectory, 0o755); err != nil {
+	if err := os.MkdirAll(s.dir(), 0o755); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(sf, "", "  ")
@@ -73,9 +104,9 @@ func SaveSchematic(name string, cb *Clipboard) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-// LoadSchematic reads a previously saved schematic into a Clipboard.
-func LoadSchematic(name string) (*Clipboard, error) {
-	path, err := schematicPath(name)
+// Load reads a previously saved schematic into a Clipboard.
+func (s FileSchematicStore) Load(name string) (*Clipboard, error) {
+	path, err := s.path(name)
 	if err != nil {
 		return nil, err
 	}
@@ -111,18 +142,18 @@ func LoadSchematic(name string) (*Clipboard, error) {
 	return cb, nil
 }
 
-// DeleteSchematic removes a saved schematic file.
-func DeleteSchematic(name string) error {
-	path, err := schematicPath(name)
+// Delete removes a saved schematic file.
+func (s FileSchematicStore) Delete(name string) error {
+	path, err := s.path(name)
 	if err != nil {
 		return err
 	}
 	return os.Remove(path)
 }
 
-// ListSchematics returns saved schematic names in alphabetical order.
-func ListSchematics() ([]string, error) {
-	entries, err := os.ReadDir(SchematicDirectory)
+// List returns saved schematic names in alphabetical order.
+func (s FileSchematicStore) List() ([]string, error) {
+	entries, err := os.ReadDir(s.dir())
 	if os.IsNotExist(err) {
 		return nil, nil
 	}

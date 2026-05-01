@@ -127,21 +127,18 @@ func TestCopyPasteNoAirKeepsExistingBlocks(t *testing.T) {
 
 func TestSchematicRoundTrip(t *testing.T) {
 	withTx(t, func(tx *world.Tx) {
-		dir := t.TempDir()
-		old := edit.SchematicDirectory
-		edit.SchematicDirectory = filepath.Join(dir, "schematics")
-		defer func() { edit.SchematicDirectory = old }()
+		store := edit.NewFileSchematicStore(filepath.Join(t.TempDir(), "schematics"))
 
 		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 0, 0))
 		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Stone{}, nil)
-		created, err := service.Schematic(tx, s, cube.Pos{0, 0, 0}, cube.North, []string{"create", "one"})
+		created, err := service.Schematic(tx, s, cube.Pos{0, 0, 0}, cube.North, store, []string{"create", "one"})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if created.Name != "one" {
 			t.Fatalf("created name = %q, want one", created.Name)
 		}
-		pasted, err := service.Schematic(tx, s, cube.Pos{5, 0, 0}, cube.North, []string{"paste", "one"})
+		pasted, err := service.Schematic(tx, s, cube.Pos{5, 0, 0}, cube.North, store, []string{"paste", "one"})
 		if err != nil {
 			t.Fatal(err)
 		}

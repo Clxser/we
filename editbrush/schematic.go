@@ -10,7 +10,10 @@ import (
 	"github.com/df-mc/we/history"
 )
 
-func applySchematicBrush(tx *world.Tx, target cube.Pos, dir cube.Direction, cfg BrushConfig, batch *history.Batch) error {
+func applySchematicBrush(tx *world.Tx, target cube.Pos, dir cube.Direction, cfg BrushConfig, store edit.SchematicStore, batch *history.Batch) error {
+	if store == nil {
+		store = edit.DefaultSchematicStore()
+	}
 	if len(cfg.Schematics) == 0 {
 		return fmt.Errorf("schematic brush has no schematics selected")
 	}
@@ -18,7 +21,7 @@ func applySchematicBrush(tx *world.Tx, target cube.Pos, dir cube.Direction, cfg 
 	if cfg.RandomSchematic {
 		name = cfg.Schematics[rand.Intn(len(cfg.Schematics))]
 	}
-	cb, err := edit.LoadSchematic(name)
+	cb, err := store.Load(name)
 	if err != nil {
 		return err
 	}

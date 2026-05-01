@@ -1,7 +1,9 @@
 package edit_test
 
 import (
+	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	_ "unsafe"
 
@@ -139,17 +141,15 @@ func TestBiomeChangesAreUndoable(t *testing.T) {
 }
 
 func TestSchematicRoundTrip(t *testing.T) {
-	oldDir := edit.SchematicDirectory
-	edit.SchematicDirectory = filepath.Join(t.TempDir(), "schematics")
-	defer func() { edit.SchematicDirectory = oldDir }()
+	store := edit.NewFileSchematicStore(filepath.Join(t.TempDir(), "schematics"))
 
 	withTx(t, func(tx *world.Tx) {
 		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Stone{}, nil)
 		cb := edit.CopySelection(tx, geo.NewArea(0, 0, 0, 0, 0, 0), cube.Pos{0, 0, 0}, cube.East, edit.BlockMask{All: true, IncludeAir: true}, false)
-		if err := edit.SaveSchematic("one", cb); err != nil {
+		if err := store.Save("one", cb); err != nil {
 			t.Fatalf("SaveSchematic: %v", err)
 		}
-		loaded, err := edit.LoadSchematic("one")
+		loaded, err := store.Load("one")
 		if err != nil {
 			t.Fatalf("LoadSchematic: %v", err)
 		}
@@ -194,4 +194,50 @@ func TestLineThicknessUsesRequestedWidth(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestFileSchematicStoreListAndDelete(t *testing.T) {
+	store := edit.NewFileSchematicStore(filepath.Join(t.TempDir(), "schematics"))
+
+	withTx(t, func(tx *world.Tx) {
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Stone{}, nil)
+		cb := edit.CopySelection(tx, geo.NewArea(0, 0, 0, 0, 0, 0), cube.Pos{0, 0, 0}, cube.North, edit.BlockMask{All: true, IncludeAir: true}, false)
+		if err := store.Save("beta", cb); err != nil {
+			t.Fatalf("Save beta: %v", err)
+		}
+		if err := store.Save("alpha", cb); err != nil {
+			t.Fatalf("Save alpha: %v", err)
+		}
+	})
+
+	if err := os.WriteFile(filepath.Join(store.Dir, "notes.txt"), []byte("ignore"), 0o644); err != nil {
+		t.Fatalf("write non-schematic file: %v", err)
+	}
+	names, err := store.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if !reflect.DeepEqual(names, []string{"alpha", "beta"}) {
+		t.Fatalf("names = %v, want [alpha beta]", names)
+	}
+	if err := store.Delete("alpha"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	names, err = store.List()
+	if err != nil {
+		t.Fatalf("List after delete: %v", err)
+	}
+	if !reflect.DeepEqual(names, []string{"beta"}) {
+		t.Fatalf("names after delete = %v, want [beta]", names)
+	}
+}
+
+func TestFileSchematicStoreRejectsUnsafeNames(t *testing.T) {
+	store := edit.NewFileSchematicStore(t.TempDir())
+	if _, err := store.Load("../escape"); err == nil {
+		t.Fatal("Load accepted unsafe schematic name")
+	}
+	if err := store.Delete("bad/name"); err == nil {
+		t.Fatal("Delete accepted unsafe schematic name")
+	}
 }

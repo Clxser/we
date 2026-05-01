@@ -66,7 +66,8 @@ type SchematicCommand struct {
 func (c SchematicCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
 	args := strings.Fields(string(c.Args))
-	result, err := service.Schematic(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), p.Rotation().Direction(), args)
+	s := session.Ensure(p)
+	result, err := service.Schematic(tx, s, cube.PosFromVec3(p.Position()), p.Rotation().Direction(), s.SchematicStore(), args)
 	if err != nil {
 		o.Error(err)
 		return
