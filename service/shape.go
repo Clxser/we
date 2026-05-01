@@ -11,6 +11,7 @@ import (
 	"github.com/df-mc/we/parse"
 )
 
+// Line draws a line of args[0] blocks with args[1] thickness between pos1 and pos2.
 func Line(tx *world.Tx, s Session, args []string) (ChangeResult, error) {
 	if len(args) < 2 {
 		return ChangeResult{}, fmt.Errorf("usage: //line <blocks> <thickness>")
@@ -32,6 +33,8 @@ func Line(tx *world.Tx, s Session, args []string) (ChangeResult, error) {
 	return record(s, batch), nil
 }
 
+// Shape applies a primitive of kind centred at anchor. The "-h" flag in args
+// switches to hollow placement.
 func Shape(tx *world.Tx, s Session, anchor cube.Pos, kind edit.ShapeKind, args []string) (ChangeResult, error) {
 	hollow := HasFlag(args, "-h")
 	args = RemoveFlags(args, "-h")
@@ -44,6 +47,9 @@ func Shape(tx *world.Tx, s Session, anchor cube.Pos, kind edit.ShapeKind, args [
 	return record(s, batch), nil
 }
 
+// ParseShapeArgs parses a shape's argument list into a ShapeSpec and block list.
+// Sphere, cylinder, and cone expect <blocks> <radius> <height>; pyramid and cube
+// expect <blocks> <length> <width> <height>.
 func ParseShapeArgs(kind edit.ShapeKind, args []string, hollow bool) (edit.ShapeSpec, []world.Block, error) {
 	if len(args) < 3 {
 		return edit.ShapeSpec{}, nil, fmt.Errorf("not enough shape arguments")

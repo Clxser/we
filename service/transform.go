@@ -10,6 +10,8 @@ import (
 	"github.com/df-mc/we/history"
 )
 
+// Move shifts blocks matching args[0] by args[1] along dir. The "-a" flag skips
+// writing air at the destination.
 func Move(tx *world.Tx, s Session, dir cube.Pos, args []string) (ChangeResult, error) {
 	if len(args) < 2 {
 		return ChangeResult{}, fmt.Errorf("usage: //move <all|only:types> <distance> [-a]")
@@ -31,6 +33,7 @@ func Move(tx *world.Tx, s Session, dir cube.Pos, args []string) (ChangeResult, e
 	return record(s, batch), nil
 }
 
+// Stack repeats the selection args[0] times along dir.
 func Stack(tx *world.Tx, s Session, dir cube.Pos, args []string) (ChangeResult, error) {
 	if len(args) < 1 {
 		return ChangeResult{}, fmt.Errorf("usage: //stack <amount> [-a]")
@@ -48,6 +51,8 @@ func Stack(tx *world.Tx, s Session, dir cube.Pos, args []string) (ChangeResult, 
 	return record(s, batch), nil
 }
 
+// Rotate rotates the selection in place by args[0] degrees (90, 180, 270, or 360)
+// around the optional args[1] axis (default y).
 func Rotate(tx *world.Tx, s Session, args []string) (ChangeResult, error) {
 	if len(args) < 1 {
 		return ChangeResult{}, fmt.Errorf("usage: //rotate <90|180|270|360> [x|y|z]")
@@ -72,6 +77,7 @@ func Rotate(tx *world.Tx, s Session, args []string) (ChangeResult, error) {
 	return record(s, batch), nil
 }
 
+// Flip mirrors the selection across axis (x, y, or z).
 func Flip(tx *world.Tx, s Session, axis string) (ChangeResult, error) {
 	if !ValidAxis(axis) {
 		return ChangeResult{}, fmt.Errorf("axis must be x, y, or z")

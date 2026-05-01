@@ -11,6 +11,8 @@ import (
 	"github.com/df-mc/we/parse"
 )
 
+// Copy stores the current selection on s's clipboard. Optional args of "only <blocks>"
+// restrict the copy to those block types.
 func Copy(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, args []string) (CopyResult, error) {
 	area, err := selectedArea(s)
 	if err != nil {
@@ -33,6 +35,8 @@ func Copy(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, args []s
 	return CopyResult{Copied: len(cb.Entries)}, nil
 }
 
+// Paste writes s's clipboard at origin, rotated to match dir. The "-a" flag in
+// args skips writing air. Returns ErrClipboardEmpty if no clipboard is set.
 func Paste(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, args []string) (ChangeResult, error) {
 	cb, ok := s.Clipboard()
 	if !ok {
@@ -45,6 +49,7 @@ func Paste(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, args []
 	return record(s, batch), nil
 }
 
+// Cut copies the selection to s's clipboard (including air) and clears it to air.
 func Cut(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction) (ChangeResult, error) {
 	area, err := selectedArea(s)
 	if err != nil {
@@ -57,6 +62,8 @@ func Cut(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction) (ChangeRe
 	return record(s, batch), nil
 }
 
+// Schematic dispatches the //schematic subcommands: create, paste, delete, list.
+// args[0] selects the subcommand; args[1] is the schematic name when required.
 func Schematic(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, args []string) (SchematicResult, error) {
 	if len(args) == 0 {
 		return SchematicResult{}, fmt.Errorf("usage: //schematic <create|paste|delete|list> [name] [-a]")
@@ -108,6 +115,8 @@ func Schematic(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, arg
 	}
 }
 
+// Undo reverts the most recent batch on s's stack. If brush is true the brush
+// stack is used. Returns ErrNothingToUndo when the stack is empty.
 func Undo(tx *world.Tx, s Session, brush bool) error {
 	if !s.Undo(tx, brush) {
 		return ErrNothingToUndo
@@ -115,6 +124,8 @@ func Undo(tx *world.Tx, s Session, brush bool) error {
 	return nil
 }
 
+// Redo restores the most recently undone batch. If brush is true the brush stack
+// is used. Returns ErrNothingToRedo when the stack is empty.
 func Redo(tx *world.Tx, s Session, brush bool) error {
 	if !s.Redo(tx, brush) {
 		return ErrNothingToRedo

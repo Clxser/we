@@ -10,6 +10,7 @@ import (
 	"github.com/df-mc/we/parse"
 )
 
+// Set fills the current selection with random picks from blockSpec.
 func Set(tx *world.Tx, s Session, blockSpec string) (ChangeResult, error) {
 	area, err := selectedArea(s)
 	if err != nil {
@@ -24,6 +25,7 @@ func Set(tx *world.Tx, s Session, blockSpec string) (ChangeResult, error) {
 	return record(s, batch), nil
 }
 
+// Center places one block at the centre of the selection and returns its position.
 func Center(tx *world.Tx, s Session, blockSpec string) (PositionResult, error) {
 	area, err := selectedArea(s)
 	if err != nil {
@@ -39,6 +41,7 @@ func Center(tx *world.Tx, s Session, blockSpec string) (PositionResult, error) {
 	return PositionResult{Changed: result.Changed, Pos: pos}, nil
 }
 
+// Walls fills only the outer shell of the selection cuboid.
 func Walls(tx *world.Tx, s Session, blockSpec string) (ChangeResult, error) {
 	area, err := selectedArea(s)
 	if err != nil {
@@ -53,6 +56,7 @@ func Walls(tx *world.Tx, s Session, blockSpec string) (ChangeResult, error) {
 	return record(s, batch), nil
 }
 
+// Drain removes water and lava in a sphere of the given radius around center.
 func Drain(tx *world.Tx, s Session, center cube.Pos, radius int) (ChangeResult, error) {
 	if radius < 1 {
 		return ChangeResult{}, fmt.Errorf("radius must be positive")
@@ -62,6 +66,7 @@ func Drain(tx *world.Tx, s Session, center cube.Pos, radius int) (ChangeResult, 
 	return record(s, batch), nil
 }
 
+// BiomeNames returns the names of every biome registered with Dragonfly.
 func BiomeNames() []string {
 	bs := world.Biomes()
 	names := make([]string, 0, len(bs))
@@ -71,6 +76,8 @@ func BiomeNames() []string {
 	return names
 }
 
+// SetBiome sets the biome of every block in the selection. Returns the resolved
+// biome on success, or an error if name does not match a registered biome.
 func SetBiome(tx *world.Tx, s Session, name string) (world.Biome, error) {
 	b, ok := world.BiomeByName(name)
 	if !ok {
@@ -86,6 +93,7 @@ func SetBiome(tx *world.Tx, s Session, name string) (world.Biome, error) {
 	return b, nil
 }
 
+// Replace swaps blocks matching args[0] for picks from args[1:] inside the selection.
 func Replace(tx *world.Tx, s Session, args []string) (ChangeResult, error) {
 	if len(args) < 2 {
 		return ChangeResult{}, fmt.Errorf("usage: //replace <all|from> <to>")
@@ -103,6 +111,8 @@ func Replace(tx *world.Tx, s Session, args []string) (ChangeResult, error) {
 	return record(s, batch), nil
 }
 
+// ReplaceNear runs Replace inside a sphere of the given distance around center,
+// independent of the selection.
 func ReplaceNear(tx *world.Tx, s Session, center cube.Pos, distance int, args []string) (ChangeResult, error) {
 	if distance < 1 || len(args) < 2 {
 		return ChangeResult{}, fmt.Errorf("usage: //replacenear <distance> <from> <to>")
@@ -116,6 +126,7 @@ func ReplaceNear(tx *world.Tx, s Session, center cube.Pos, distance int, args []
 	return record(s, batch), nil
 }
 
+// TopLayer replaces only the topmost matching block in each (x, z) column of the selection.
 func TopLayer(tx *world.Tx, s Session, args []string) (ChangeResult, error) {
 	if len(args) < 2 {
 		return ChangeResult{}, fmt.Errorf("usage: //toplayer <all|only:types> <to>")
@@ -133,6 +144,7 @@ func TopLayer(tx *world.Tx, s Session, args []string) (ChangeResult, error) {
 	return record(s, batch), nil
 }
 
+// Overlay places blocks one layer above the highest non-air block in each column.
 func Overlay(tx *world.Tx, s Session, blockSpec string) (ChangeResult, error) {
 	blocks, err := parse.ParseBlockList(blockSpec)
 	if err != nil {
