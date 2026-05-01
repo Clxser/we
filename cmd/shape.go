@@ -11,8 +11,8 @@ import (
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/edit"
 	"github.com/df-mc/we/editbrush"
-	"github.com/df-mc/we/history"
 	"github.com/df-mc/we/parse"
+	"github.com/df-mc/we/service"
 	"github.com/df-mc/we/session"
 )
 
@@ -24,30 +24,12 @@ type LineCommand struct {
 
 func (c LineCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
-	args := strings.Fields(string(c.Args))
-	if len(args) < 2 {
-		o.Error("usage: //line <blocks> <thickness>")
-		return
-	}
-	blocks, err := parse.ParseBlockList(args[0])
+	result, err := service.Line(tx, session.Ensure(p), strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	thickness, err := strconv.Atoi(args[1])
-	if err != nil {
-		o.Error(err)
-		return
-	}
-	pos1, pos2, ok := session.Ensure(p).PosCorners()
-	if !ok {
-		o.Error("pos1 and pos2 must be set first")
-		return
-	}
-	batch := history.NewBatch(false)
-	edit.Line(tx, pos1, pos2, thickness, blocks, batch)
-	record(p, batch)
-	o.Printf("Drew line with %d changes.", batch.Len())
+	o.Printf("Drew line with %d changes.", result.Changed)
 }
 
 // ShapeCommand backs //sphere, //cylinder, //pyramid, //cone, and //cube.
@@ -60,18 +42,12 @@ type ShapeCommand struct {
 
 func (c ShapeCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
-	args := strings.Fields(string(c.Args))
-	hollow := hasFlag(args, "-h")
-	args = removeFlags(args, "-h")
-	spec, blocks, err := parseShapeArgs(c.Kind, args, hollow)
+	result, err := service.Shape(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), c.Kind, strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	batch := history.NewBatch(false)
-	edit.ApplyShape(tx, cube.PosFromVec3(p.Position()), spec, blocks, batch)
-	record(p, batch)
-	o.Printf("Created %s with %d changes.", c.Kind, batch.Len())
+	o.Printf("Created %s with %d changes.", c.Kind, result.Changed)
 }
 
 // BrushCommand implements //brush — opens the brush form with no args, or quick-binds with <type> [blocks] [radius].

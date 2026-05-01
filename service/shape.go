@@ -1,0 +1,84 @@
+package service
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/df-mc/dragonfly/server/block/cube"
+	"github.com/df-mc/dragonfly/server/world"
+	"github.com/df-mc/we/edit"
+	"github.com/df-mc/we/history"
+	"github.com/df-mc/we/parse"
+)
+
+func Line(tx *world.Tx, s Session, args []string) (ChangeResult, error) {
+	if len(args) < 2 {
+		return ChangeResult{}, fmt.Errorf("usage: //line <blocks> <thickness>")
+	}
+	blocks, err := parse.ParseBlockList(args[0])
+	if err != nil {
+		return ChangeResult{}, err
+	}
+	thickness, err := strconv.Atoi(args[1])
+	if err != nil {
+		return ChangeResult{}, err
+	}
+	pos1, pos2, ok := s.PosCorners()
+	if !ok {
+		return ChangeResult{}, ErrSelectionRequired
+	}
+	batch := history.NewBatch(false)
+	edit.Line(tx, pos1, pos2, thickness, blocks, batch)
+	return record(s, batch), nil
+}
+
+func Shape(tx *world.Tx, s Session, anchor cube.Pos, kind edit.ShapeKind, args []string) (ChangeResult, error) {
+	hollow := HasFlag(args, "-h")
+	args = RemoveFlags(args, "-h")
+	spec, blocks, err := ParseShapeArgs(kind, args, hollow)
+	if err != nil {
+		return ChangeResult{}, err
+	}
+	batch := history.NewBatch(false)
+	edit.ApplyShape(tx, anchor, spec, blocks, batch)
+	return record(s, batch), nil
+}
+
+func ParseShapeArgs(kind edit.ShapeKind, args []string, hollow bool) (edit.ShapeSpec, []world.Block, error) {
+	if len(args) < 3 {
+		return edit.ShapeSpec{}, nil, fmt.Errorf("not enough shape arguments")
+	}
+	blocks, err := parse.ParseBlockList(args[0])
+	if err != nil {
+		return edit.ShapeSpec{}, nil, err
+	}
+	spec := edit.ShapeSpec{Kind: kind, Hollow: hollow}
+	switch kind {
+	case edit.ShapeSphere:
+		r, err1 := strconv.Atoi(args[1])
+		h, err2 := strconv.Atoi(args[2])
+		if err1 != nil || err2 != nil {
+			return edit.ShapeSpec{}, nil, fmt.Errorf("radius and height must be numbers")
+		}
+		spec.Radius, spec.Height = r, h
+	case edit.ShapeCylinder, edit.ShapeCone:
+		r, err1 := strconv.Atoi(args[1])
+		h, err2 := strconv.Atoi(args[2])
+		if err1 != nil || err2 != nil {
+			return edit.ShapeSpec{}, nil, fmt.Errorf("radius and height must be numbers")
+		}
+		spec.Radius, spec.Height = r, h
+	case edit.ShapePyramid, edit.ShapeCube:
+		if len(args) < 4 {
+			return edit.ShapeSpec{}, nil, fmt.Errorf("length, width, and height are required")
+		}
+		l, err1 := strconv.Atoi(args[1])
+		w, err2 := strconv.Atoi(args[2])
+		h, err3 := strconv.Atoi(args[3])
+		if err1 != nil || err2 != nil || err3 != nil {
+			return edit.ShapeSpec{}, nil, fmt.Errorf("length, width, and height must be numbers")
+		}
+		spec.Length, spec.Width, spec.Height = l, w, h
+	}
+	return spec, blocks, nil
+}
