@@ -1,6 +1,7 @@
 package we
 
 import (
+	"image/color"
 	"iter"
 
 	"github.com/df-mc/dragonfly/server/block/cube"
@@ -15,15 +16,18 @@ import (
 	"github.com/df-mc/we/keys"
 	"github.com/df-mc/we/palette"
 	"github.com/df-mc/we/session"
+	"github.com/df-mc/we/visual"
 	"github.com/go-gl/mathgl/mgl64"
 )
 
 // Handler is the main world-edit player handler.
 type Handler struct {
 	player.NopHandler
-	p   *player.Player
-	ph  *palette.Handler
-	cfg Config
+	p              *player.Player
+	ph             *palette.Handler
+	selectionTrace visual.Wireframe
+
+  cfg Config
 }
 
 // NewHandler returns a player handler. WorldEdit commands register when the
@@ -47,9 +51,11 @@ func (h *Handler) HandleItemUse(ctx *player.Context) {
 func (h *Handler) HandleItemUseOnBlock(ctx *player.Context, pos cube.Pos, face cube.Face, vec mgl64.Vec3) {
 	if h.heldWand() {
 		ctx.Cancel()
-		if session.Ensure(h.p).SetPos2(pos) {
+		s := session.Ensure(h.p)
+		if s.SetPos2(pos) {
 			h.p.Messagef("pos2 set to %v", pos)
 		}
+		h.traceSelection(s)
 		return
 	}
 	if cfg, ok := h.heldBrush(); ok {
@@ -64,9 +70,11 @@ func (h *Handler) HandleItemUseOnBlock(ctx *player.Context, pos cube.Pos, face c
 func (h *Handler) HandleBlockBreak(ctx *player.Context, pos cube.Pos, drops *[]item.Stack, xp *int) {
 	if h.heldWand() {
 		ctx.Cancel()
-		if session.Ensure(h.p).SetPos1(pos) {
+		s := session.Ensure(h.p)
+		if s.SetPos1(pos) {
 			h.p.Messagef("pos1 set to %v", pos)
 		}
+		h.traceSelection(s)
 		return
 	}
 	h.ph.HandleBlockBreak(ctx, pos, drops, xp)
@@ -75,8 +83,20 @@ func (h *Handler) HandleBlockBreak(ctx *player.Context, pos cube.Pos, drops *[]i
 // HandleQuit cleans up session state.
 func (h *Handler) HandleQuit(*player.Player) {
 	h.ph.HandleQuit()
+	h.selectionTrace.Remove(h.p)
 	session.Delete(h.p)
 }
+
+func (h *Handler) traceSelection(s *session.Session) {
+	area, ok := s.SelectionArea()
+	if !ok {
+		h.selectionTrace.Remove(h.p)
+		return
+	}
+	h.selectionTrace.Draw(h.p, visual.BoxSegments(visual.AreaBox(area)), selectionTraceColour)
+}
+
+var selectionTraceColour = color.RGBA{R: 0, G: 255, B: 255, A: 255}
 
 func (h *Handler) heldWand() bool {
 	held, _ := h.p.HeldItems()

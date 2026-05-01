@@ -5,6 +5,9 @@
 *.so
 *.dylib
 
+# OMX
+.omx/
+
 # Test binary, built with `go test -c`
 *.test
 
