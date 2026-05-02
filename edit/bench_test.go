@@ -35,6 +35,21 @@ func fillBenchArea(tx *world.Tx, area geo.Area) {
 	})
 }
 
+func BenchmarkFillArea(b *testing.B) {
+	w := newBenchWorld(b)
+	area := geo.NewArea(0, 0, 0, 15, 7, 15)
+	blocks := []world.Block{mcblock.Stone{}}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		execBenchTx(b, w, func(tx *world.Tx) {
+			batch := history.NewBatch(false)
+			edit.FillArea(tx, area, blocks, batch)
+		})
+	}
+}
+
 func BenchmarkCopySelection(b *testing.B) {
 	w := newBenchWorld(b)
 	area := geo.NewArea(0, 0, 0, 7, 3, 7)

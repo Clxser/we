@@ -37,7 +37,7 @@ func ApplyBrush(tx *world.Tx, actor BrushActor, target cube.Pos, cfg BrushConfig
 	case BrushFill:
 		applyBrushShape(tx, target, cfg, func(pos cube.Pos) {
 			if pos[1] <= target[1] {
-				batch.SetBlock(tx, pos, edit.ChooseBlock(blocks, nil))
+				batch.SetBlockFast(tx, pos, edit.ChooseBlock(blocks, nil))
 			}
 		})
 	case BrushTopLayer:
@@ -62,7 +62,7 @@ func ApplyBrush(tx *world.Tx, actor BrushActor, target cube.Pos, cfg BrushConfig
 		mask := edit.BlockMask{All: cfg.All, IncludeAir: cfg.ReplaceAir, Blocks: from}
 		applyBrushShape(tx, target, cfg, func(pos cube.Pos) {
 			if mask.Match(tx.Block(pos)) {
-				batch.SetBlock(tx, pos, edit.ChooseBlock(blocks, nil))
+				batch.SetBlockFast(tx, pos, edit.ChooseBlock(blocks, nil))
 			}
 		})
 	case BrushLine:

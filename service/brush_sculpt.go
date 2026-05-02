@@ -18,7 +18,7 @@ func applyPaint(tx *world.Tx, target cube.Pos, cfg BrushConfig, blocks []world.B
 	strength := math.Max(0, math.Min(1, cfg.Strength))
 	applyBrushShape(tx, target, cfg, func(pos cube.Pos) {
 		if isSurface(tx, pos) && rand.Float64() <= strength {
-			batch.SetBlock(tx, pos, edit.ChooseBlock(blocks, nil))
+			batch.SetBlockFast(tx, pos, edit.ChooseBlock(blocks, nil))
 		}
 	})
 }
@@ -40,7 +40,7 @@ func applyPushPull(tx *world.Tx, actor BrushActor, target cube.Pos, cfg BrushCon
 		snap[pos] = history.SnapshotAtBlock(tx, pos)
 	}
 	for _, pos := range positions {
-		batch.SetBlock(tx, pos, mcblock.Air{})
+		batch.SetBlockFast(tx, pos, mcblock.Air{})
 		batch.SetLiquid(tx, pos, nil)
 	}
 	for _, pos := range positions {
@@ -86,7 +86,7 @@ func applyTerraform(tx *world.Tx, target cube.Pos, cfg BrushConfig, blocks []wor
 			}
 			for _, f := range cube.Faces() {
 				if !parse.IsAir(tx.Block(pos.Side(f))) {
-					batch.SetBlock(tx, pos, edit.ChooseBlock(blocks, nil))
+					batch.SetBlockFast(tx, pos, edit.ChooseBlock(blocks, nil))
 					return
 				}
 			}
@@ -95,7 +95,7 @@ func applyTerraform(tx *world.Tx, target cube.Pos, cfg BrushConfig, blocks []wor
 	}
 	applyBrushShape(tx, target, cfg, func(pos cube.Pos) {
 		if isSurface(tx, pos) {
-			batch.SetBlock(tx, pos, mcblock.Air{})
+			batch.SetBlockFast(tx, pos, mcblock.Air{})
 		}
 	})
 }

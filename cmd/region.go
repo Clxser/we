@@ -165,3 +165,64 @@ func (c OverlayCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	}
 	o.Printf("Overlay changed %d blocks.", result.Changed)
 }
+
+// RemoveAboveCommand implements //removeabove [height] [radius] — clears blocks above the player.
+type RemoveAboveCommand struct {
+	playerCommand
+	Args dcf.Varargs `cmd:"args"`
+}
+
+func (c RemoveAboveCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
+	p := src.(*player.Player)
+	result, err := service.RemoveAbove(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), strings.Fields(string(c.Args)))
+	if err != nil {
+		o.Error(err)
+		return
+	}
+	o.Printf("Removed %d blocks above.", result.Changed)
+}
+
+// RemoveBelowCommand implements //removebelow [height] [radius] — clears blocks below the player.
+type RemoveBelowCommand struct {
+	playerCommand
+	Args dcf.Varargs `cmd:"args"`
+}
+
+func (c RemoveBelowCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
+	p := src.(*player.Player)
+	result, err := service.RemoveBelow(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), strings.Fields(string(c.Args)))
+	if err != nil {
+		o.Error(err)
+		return
+	}
+	o.Printf("Removed %d blocks below.", result.Changed)
+}
+
+// RemoveNearCommand implements //removenear <blocks> <radius> — clears matching nearby blocks.
+type RemoveNearCommand struct {
+	playerCommand
+	Args dcf.Varargs `cmd:"args"`
+}
+
+func (c RemoveNearCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
+	p := src.(*player.Player)
+	result, err := service.RemoveNear(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), strings.Fields(string(c.Args)))
+	if err != nil {
+		o.Error(err)
+		return
+	}
+	o.Printf("Removed %d nearby blocks.", result.Changed)
+}
+
+// NaturalizeCommand implements //naturalize — turns selected terrain into grass, dirt, and stone layers.
+type NaturalizeCommand struct{ playerCommand }
+
+func (NaturalizeCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
+	p := src.(*player.Player)
+	result, err := service.Naturalize(tx, session.Ensure(p))
+	if err != nil {
+		o.Error(err)
+		return
+	}
+	o.Printf("Naturalized %d blocks.", result.Changed)
+}

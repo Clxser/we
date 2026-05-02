@@ -49,6 +49,11 @@ func Paste(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, args []
 	return record(s, batch), nil
 }
 
+// ClearClipboard removes the stored clipboard from s.
+func ClearClipboard(s Session) {
+	s.SetClipboard(nil)
+}
+
 // Cut copies the selection to s's clipboard (including air) and clears it to air.
 func Cut(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction) (ChangeResult, error) {
 	area, err := selectedArea(s)

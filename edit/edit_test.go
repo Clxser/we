@@ -1,6 +1,7 @@
 package edit_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -73,6 +74,75 @@ func TestFillUndoRedoBatch(t *testing.T) {
 	})
 }
 
+func TestFillAreaLiquidUndoRedoBatch(t *testing.T) {
+	var failure string
+	withTx(t, func(tx *world.Tx) {
+		pos := cube.Pos{0, 0, 0}
+		before := mcblock.Dirt{}
+		after := mcblock.Water{Depth: 8, Still: true}
+		tx.SetBlock(pos, before, nil)
+
+		h := history.NewHistory(10)
+		batch := history.NewBatch(false)
+		edit.FillArea(tx, geo.NewArea(0, 0, 0, 0, 0, 0), []world.Block{after}, batch)
+		if got := h.Record(batch); got != 1 {
+			failure = fmt.Sprintf("Record() = %d, want 1", got)
+			return
+		}
+
+		liq, ok := tx.Liquid(pos)
+		if !parse.SameBlock(tx.Block(pos), after) || !parse.SameLiquid(liq, ok, after, true) {
+			failure = fmt.Sprintf("fill liquid state = block %T liquid %T/%v, want water", tx.Block(pos), liq, ok)
+			return
+		}
+		if !h.Undo(tx, false) {
+			failure = "Undo returned false"
+			return
+		}
+		if !parse.SameBlock(tx.Block(pos), before) {
+			failure = "undo did not restore original block"
+			return
+		}
+		if liq, ok := tx.Liquid(pos); ok {
+			failure = fmt.Sprintf("undo left liquid layer %T", liq)
+			return
+		}
+		if !h.Redo(tx, false) {
+			failure = "Redo returned false"
+			return
+		}
+		liq, ok = tx.Liquid(pos)
+		if !parse.SameBlock(tx.Block(pos), after) || !parse.SameLiquid(liq, ok, after, true) {
+			failure = "redo did not restore liquid fill"
+		}
+	})
+	if failure != "" {
+		t.Fatal(failure)
+	}
+}
+
+func TestClearAreaRemovesLiquidLayer(t *testing.T) {
+	var failure string
+	withTx(t, func(tx *world.Tx) {
+		pos := cube.Pos{0, 0, 0}
+		tx.SetBlock(pos, mcblock.Stone{}, nil)
+		tx.SetLiquid(pos, mcblock.Water{Depth: 8, Still: true})
+
+		batch := history.NewBatch(false)
+		edit.ClearArea(tx, geo.NewArea(0, 0, 0, 0, 0, 0), batch)
+		if !parse.SameBlock(tx.Block(pos), mcblock.Air{}) {
+			failure = "clear did not replace block with air"
+			return
+		}
+		if liq, ok := tx.Liquid(pos); ok {
+			failure = fmt.Sprintf("clear left liquid layer %T", liq)
+		}
+	})
+	if failure != "" {
+		t.Fatal(failure)
+	}
+}
+
 func TestClipboardPasteNoAirKeepsExistingBlocks(t *testing.T) {
 	withTx(t, func(tx *world.Tx) {
 		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Stone{}, nil)
@@ -91,6 +161,56 @@ func TestClipboardPasteNoAirKeepsExistingBlocks(t *testing.T) {
 			t.Fatal("-a paste overwrote existing block with air")
 		}
 	})
+}
+
+func TestClipboardDensePastePreservesOffsetsLiquidsAndUndo(t *testing.T) {
+	var failure string
+	withTx(t, func(tx *world.Tx) {
+		source := geo.NewArea(-1, 0, 2, 0, 0, 2)
+		tx.SetBlock(cube.Pos{-1, 0, 2}, mcblock.Stone{}, nil)
+		tx.SetBlock(cube.Pos{0, 0, 2}, mcblock.Water{Depth: 8, Still: true}, nil)
+		tx.SetBlock(cube.Pos{9, 0, 0}, mcblock.Gold{}, nil)
+
+		cb := edit.CopySelection(tx, source, cube.Pos{0, 0, 0}, cube.North, edit.BlockMask{All: true, IncludeAir: true}, false)
+		h := history.NewHistory(10)
+		batch := history.NewBatch(false)
+		if err := edit.PasteClipboard(tx, cb, cube.Pos{10, 0, 0}, cube.North, false, batch); err != nil {
+			failure = fmt.Sprintf("PasteClipboard: %v", err)
+			return
+		}
+		if got := h.Record(batch); got != 1 {
+			failure = fmt.Sprintf("Record() = %d, want 1", got)
+			return
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{9, 0, 2}), mcblock.Stone{}) {
+			failure = "dense paste missed negative clipboard offset"
+			return
+		}
+		water := mcblock.Water{Depth: 8, Still: true}
+		liq, ok := tx.Liquid(cube.Pos{10, 0, 2})
+		if !parse.SameBlock(tx.Block(cube.Pos{10, 0, 2}), water) || !parse.SameLiquid(liq, ok, water, true) {
+			failure = "dense paste did not preserve liquid block"
+			return
+		}
+		if !h.Undo(tx, false) {
+			failure = "Undo returned false"
+			return
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{9, 0, 0}), mcblock.Gold{}) {
+			failure = "undo changed unrelated block"
+			return
+		}
+		if !parse.IsAir(tx.Block(cube.Pos{9, 0, 2})) || !parse.IsAir(tx.Block(cube.Pos{10, 0, 2})) {
+			failure = "undo did not clear pasted blocks"
+			return
+		}
+		if !h.Redo(tx, false) {
+			failure = "Redo returned false"
+		}
+	})
+	if failure != "" {
+		t.Fatal(failure)
+	}
 }
 
 func TestHollowCubeDoesNotOverwriteInterior(t *testing.T) {

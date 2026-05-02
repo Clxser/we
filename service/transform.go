@@ -54,7 +54,7 @@ func Stack(tx *world.Tx, s Session, dir cube.Pos, args []string) (ChangeResult, 
 	return record(s, batch), nil
 }
 
-// Rotate rotates the selection in place by args[0] degrees (90, 180, 270, or 360)
+// Rotate rotates the clipboard by args[0] degrees (90, 180, 270, or 360)
 // around the optional args[1] axis (default y).
 func Rotate(tx *world.Tx, s Session, args []string) (ChangeResult, error) {
 	if len(args) < 1 {
@@ -71,25 +71,29 @@ func Rotate(tx *world.Tx, s Session, args []string) (ChangeResult, error) {
 	if !ValidAxis(axis) {
 		return ChangeResult{}, fmt.Errorf("axis must be x, y, or z")
 	}
-	area, err := selectedArea(s)
-	if err != nil {
+	cb, ok := s.Clipboard()
+	if !ok {
+		return ChangeResult{}, ErrClipboardEmpty
+	}
+	if err := edit.RotateClipboard(cb, deg, axis); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := history.NewBatch(false)
-	edit.RotateCopy(tx, area, deg, axis, batch)
-	return record(s, batch), nil
+	s.SetClipboard(cb)
+	return ChangeResult{Changed: len(cb.Entries)}, nil
 }
 
-// Flip mirrors the selection across axis (x, y, or z).
+// Flip mirrors the clipboard across axis (x, y, or z).
 func Flip(tx *world.Tx, s Session, axis string) (ChangeResult, error) {
 	if !ValidAxis(axis) {
 		return ChangeResult{}, fmt.Errorf("axis must be x, y, or z")
 	}
-	area, err := selectedArea(s)
-	if err != nil {
+	cb, ok := s.Clipboard()
+	if !ok {
+		return ChangeResult{}, ErrClipboardEmpty
+	}
+	if err := edit.FlipClipboard(cb, axis); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := history.NewBatch(false)
-	edit.FlipCopy(tx, area, axis, batch)
-	return record(s, batch), nil
+	s.SetClipboard(cb)
+	return ChangeResult{Changed: len(cb.Entries)}, nil
 }

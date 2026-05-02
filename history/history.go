@@ -1,6 +1,8 @@
 package history
 
 import (
+	"slices"
+
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/parse"
@@ -28,9 +30,25 @@ type Batch struct {
 	index   map[cube.Pos]int
 }
 
+var fastBlockSetOpts = &world.SetOpts{DisableBlockUpdates: true}
+
 // NewBatch creates a batch; brush batches go on the isolated brush undo stack.
 func NewBatch(brush bool) *Batch {
 	return &Batch{Brush: brush, index: map[cube.Pos]int{}}
+}
+
+// Grow preallocates storage for up to n touched positions. It is a performance
+// hint for large edits and does not change batch semantics.
+func (b *Batch) Grow(n int) {
+	if b == nil || n <= 0 {
+		return
+	}
+	if b.index == nil {
+		b.index = make(map[cube.Pos]int, n)
+	} else if len(b.index) == 0 {
+		b.index = make(map[cube.Pos]int, n)
+	}
+	b.changes = slices.Grow(b.changes, n)
 }
 
 func snapshotAt(tx *world.Tx, pos cube.Pos) snapshot {
@@ -55,13 +73,26 @@ func (b *Batch) ensure(tx *world.Tx, pos cube.Pos) int {
 // SetBlock records and writes a block. Passing nil writes air, matching
 // Dragonfly's SetBlock contract.
 func (b *Batch) SetBlock(tx *world.Tx, pos cube.Pos, block world.Block) {
+	b.setBlock(tx, pos, block, nil)
+}
+
+// SetBlockFast records and writes a block without scheduling neighbouring
+// block updates. Use it for WorldEdit-style bulk writes where the caller owns
+// the full edit operation and wants to avoid per-block physics/update fan-out.
+func (b *Batch) SetBlockFast(tx *world.Tx, pos cube.Pos, block world.Block) {
+	b.setBlock(tx, pos, block, fastBlockSetOpts)
+}
+
+func (b *Batch) setBlock(tx *world.Tx, pos cube.Pos, block world.Block, opts *world.SetOpts) {
 	i := b.ensure(tx, pos)
 	if liq, ok := block.(world.Liquid); ok {
-		tx.SetBlock(pos, nil, nil)
+		tx.SetBlock(pos, nil, opts)
 		tx.SetLiquid(pos, liq)
 	} else {
-		tx.SetBlock(pos, block, nil)
-		tx.SetLiquid(pos, nil)
+		tx.SetBlock(pos, block, opts)
+		if _, ok := tx.Liquid(pos); ok {
+			tx.SetLiquid(pos, nil)
+		}
 	}
 	b.changes[i].After = snapshotAt(tx, pos)
 }
@@ -138,10 +169,10 @@ func (b *Batch) SetAfterForIndex(tx *world.Tx, i int, pos cube.Pos) {
 }
 
 func applySnapshot(tx *world.Tx, pos cube.Pos, s snapshot) {
-	tx.SetBlock(pos, s.Block, nil)
+	tx.SetBlock(pos, s.Block, fastBlockSetOpts)
 	if s.HasLiq {
 		tx.SetLiquid(pos, s.Liquid)
-	} else {
+	} else if _, ok := tx.Liquid(pos); ok {
 		tx.SetLiquid(pos, nil)
 	}
 	if s.Biome != nil {

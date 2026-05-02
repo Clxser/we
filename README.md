@@ -17,9 +17,9 @@ framework:
 - `service` coordinates use-case validation, history recording, brush execution,
   and calls into the core packages without depending on Dragonfly command/form
   adapters.
-- `cmd`, `handler.go`, `editbrush`, `palette`, and legacy `brush`/`act` code are
-  Dragonfly adapters. They translate player commands, forms, item metadata, and
-  events into service/core operations.
+- `cmd`, `handler.go`, and `editbrush` are Dragonfly adapters. They
+  translate player commands, forms, item metadata, and events into service/core
+  operations.
 
 Keep new features in that shape: add reusable block mutation logic to `edit`,
 coordinate user-facing operations through `service`, store player state through
@@ -77,7 +77,7 @@ You can also use `//pos1` / `//pos2` instead of the wand. A valid selection requ
 | `//replace` | `//replace <mask> <to-blocks>` | Replaces blocks matching `<mask>` inside the selection with `<to-blocks>`. |
 | `//replacenear` | `//replacenear <distance> <mask> <to-blocks>` | Same replacement logic in a sphere (by Manhattan bounding box around you), not limited to selection. |
 | `//toplayer` | `//toplayer <mask> <to-blocks>` | Within the selection, replaces only the **topmost** matching blocks per column. |
-| `//overlay` | `//overlay <blocks>` | Stacks layers of `<blocks>` on top of the highest solid blocks in the selection (surface overlay). |
+| `//overlay` | `//overlay <blocks>` | Aliases: `//layer`, `layer`. Stacks layers of `<blocks>` above the highest solid blocks in each selected column, including one block above the selection's max Y. |
 
 ### Clipboard
 
@@ -86,8 +86,9 @@ You can also use `//pos1` / `//pos2` instead of the wand. A valid selection requ
 | `//copy` | `//copy` or `//copy only <blocks>` | Copies the selection to your clipboard. With `only`, only listed block types are stored. |
 | `//cut` | `//cut` | Copies the selection (including air), then clears the region to air. |
 | `//paste` | `//paste` or `//paste -a` | Pastes at your feet, rotating to your facing. **`-a`**: do not write air (keep existing blocks where the clipboard has air). |
-| `//rotate` | `//rotate <90\|180\|270\|360> [x\|y\|z]` | Rotates blocks **inside the selection** in place (around the region center; default axis **y**). Does not use the clipboard buffer. |
-| `//flip` | `//flip` or `//flip <axis>` | Mirrors blocks **inside the selection** across **x**, **y**, or **z**. Without `axis`, defaults to **x** or **z** from your facing. |
+| `//clearclipboard` | `//clearclipboard` | Clears the stored clipboard. |
+| `//rotate` | `//rotate <90\|180\|270\|360> [x\|y\|z]` | Rotates the clipboard around its origin; default axis is **y**. |
+| `//flip` | `//flip` or `//flip <axis>` | Mirrors the clipboard across **x**, **y**, or **z**. Without `axis`, defaults to **x** or **z** from your facing. |
 
 ### Transform selection (world edits)
 
@@ -118,6 +119,11 @@ Use commas for multiple block types in the first argument (e.g. `stone,dirt`).
 | `//center` | `//center <blocks>` | Places one block from `<blocks>` at the **center block** of the selection. |
 | `//walls` | `//walls <blocks>` | Fills only the **outer shell** of the selection cuboid. |
 | `//drain` | `//drain <radius>` | Removes fluids around you within `<radius>` (positive integer). |
+| `//removeabove` | `//removeabove [height] [radius]` | Clears blocks above you. Defaults to height `64`, radius `0`. |
+| `//removebelow` | `//removebelow [height] [radius]` | Clears blocks below you. Defaults to height `64`, radius `0`. |
+| `//removenear` | `//removenear <blocks> <radius>` | Clears matching blocks in a sphere around you. |
+| `//naturalize` | `//naturalize` | Converts selected terrain columns to grass, dirt, then stone layers. |
+| `//searchitem` | `//searchitem <query>` | Aliases: `//search`, `//l`. Lists matching registered item/block IDs. |
 | `//biome` | `//biome list` or `//biome set <biome>` | Lists registered biomes, or sets biome for all blocks in the **selection** for `set`. Your server must register biomes with Dragonfly or names will be missing / unknown. |
 
 ### Schematics
@@ -149,9 +155,3 @@ implementation writes JSON files under `.we-schematics`.
 Brushes are stored on the item; **use** the item to raycast and apply. Undo for brush ops is recorded separately; use `//undo b` / `//redo b` when you need brush-specific history.
 
 Brush types available in the form include shapes (`sphere`, `cylinder`, …), `fill`, `toplayer`, `overlay`, `replace`, `line`, `schematic`, terrain tools, etc. (see `editbrush` package).
-
----
-
-## Optional: palette and legacy brush commands
-
-The `palette` and `brush` packages define extra command types (`/palette set|save|delete`, `/brush bind|unbind|undo`) for older flows. They are **not** registered by `we/cmd`; register them in your server if you use those APIs alongside `we.Handler`.

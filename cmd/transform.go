@@ -45,7 +45,7 @@ func (c StackCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	o.Printf("Stacked with %d changes.", result.Changed)
 }
 
-// RotateCommand implements //rotate <90|180|270|360> [axis] — rotates blocks inside the selection in place.
+// RotateCommand implements //rotate <90|180|270|360> [axis] — rotates the clipboard.
 type RotateCommand struct {
 	playerCommand
 	Args dcf.Varargs `cmd:"args"`
@@ -58,10 +58,10 @@ func (c RotateCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 		o.Error(err)
 		return
 	}
-	o.Printf("Rotated copy with %d changes.", result.Changed)
+	o.Printf("Rotated clipboard with %d entries.", result.Changed)
 }
 
-// FlipCommand implements //flip [axis] — mirrors the selection across an axis (defaults from facing).
+// FlipCommand implements //flip [axis] — mirrors the clipboard across an axis (defaults from facing).
 type FlipCommand struct {
 	playerCommand
 	Axis dcf.Optional[string] `cmd:"axis"`
@@ -85,5 +85,5 @@ func (c FlipCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 		o.Error(err)
 		return
 	}
-	o.Printf("Flipped copy with %d changes.", result.Changed)
+	o.Printf("Flipped clipboard with %d entries.", result.Changed)
 }

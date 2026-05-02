@@ -44,6 +44,15 @@ func (c PasteCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	o.Printf("Pasted %d blocks.", result.Changed)
 }
 
+// ClearClipboardCommand implements //clearclipboard — clears the player's clipboard.
+type ClearClipboardCommand struct{ playerCommand }
+
+func (ClearClipboardCommand) Run(src dcf.Source, o *dcf.Output, _ *world.Tx) {
+	p := src.(*player.Player)
+	service.ClearClipboard(session.Ensure(p))
+	o.Print("Clipboard cleared.")
+}
+
 // CutCommand implements //cut — copies the selection to the clipboard, then clears it.
 type CutCommand struct{ playerCommand }
 

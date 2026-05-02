@@ -30,11 +30,14 @@ func PasteClipboard(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.Direc
 	if cb == nil || len(cb.Entries) == 0 {
 		return fmt.Errorf("clipboard is empty")
 	}
-	entries := make([]bufferEntry, len(cb.Entries))
-	copy(entries, cb.Entries)
 	turns := rotationTurns(cb.OriginDir, dir)
-	for i := range entries {
-		entries[i].Offset = rotateY(entries[i].Offset, turns)
+	entries := cb.Entries
+	if turns != 0 {
+		entries = make([]bufferEntry, len(cb.Entries))
+		copy(entries, cb.Entries)
+		for i := range entries {
+			entries[i].Offset = rotateOffset(entries[i].Offset, "y", turns)
+		}
 	}
 	pasteBuffer(tx, origin, entries, noAir, batch)
 	return nil
@@ -52,11 +55,4 @@ func rotationTurns(from, to cube.Direction) int {
 		}
 	}
 	return (ti - fi + 4) % 4
-}
-
-func rotateY(pos cube.Pos, turns int) cube.Pos {
-	for i := 0; i < turns; i++ {
-		pos = cube.Pos{-pos[2], pos[1], pos[0]}
-	}
-	return pos
 }

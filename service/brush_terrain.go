@@ -13,7 +13,7 @@ func brushTopLayer(tx *world.Tx, target cube.Pos, cfg BrushConfig, mask edit.Blo
 	area := spec.Bounds(target)
 	for x := area.Min[0]; x <= area.Max[0]; x++ {
 		for z := area.Min[2]; z <= area.Max[2]; z++ {
-			for y := area.Max[1]; y >= area.Min[1]; y-- {
+			for y := min(tx.HighestBlock(x, z), area.Max[1]); y >= area.Min[1]; y-- {
 				pos := cube.Pos{x, y, z}
 				if !spec.Inside(target, pos) {
 					continue
@@ -23,7 +23,7 @@ func brushTopLayer(tx *world.Tx, target cube.Pos, cfg BrushConfig, mask edit.Blo
 					continue
 				}
 				if mask.Match(b) {
-					batch.SetBlock(tx, pos, edit.ChooseBlock(blocks, nil))
+					batch.SetBlockFast(tx, pos, edit.ChooseBlock(blocks, nil))
 				}
 				break
 			}
@@ -36,7 +36,7 @@ func brushOverlay(tx *world.Tx, target cube.Pos, cfg BrushConfig, blocks []world
 	area := spec.Bounds(target)
 	for x := area.Min[0]; x <= area.Max[0]; x++ {
 		for z := area.Min[2]; z <= area.Max[2]; z++ {
-			for y := area.Max[1]; y >= area.Min[1]; y-- {
+			for y := min(tx.HighestBlock(x, z), area.Max[1]); y >= area.Min[1]; y-- {
 				pos := cube.Pos{x, y, z}
 				if !spec.Inside(target, pos) {
 					continue
@@ -46,7 +46,7 @@ func brushOverlay(tx *world.Tx, target cube.Pos, cfg BrushConfig, blocks []world
 				}
 				above := cube.Pos{x, y + 1, z}
 				if spec.Inside(target, above) && parse.IsAir(tx.Block(above)) {
-					batch.SetBlock(tx, above, edit.ChooseBlock(blocks, nil))
+					batch.SetBlockFast(tx, above, edit.ChooseBlock(blocks, nil))
 				}
 				break
 			}
@@ -103,7 +103,7 @@ func wrapOne(tx *world.Tx, pos cube.Pos, blocks []world.Block, batch *history.Ba
 	for _, f := range cube.Faces() {
 		n := pos.Side(f)
 		if parse.IsAir(tx.Block(n)) {
-			batch.SetBlock(tx, n, edit.ChooseBlock(blocks, nil))
+			batch.SetBlockFast(tx, n, edit.ChooseBlock(blocks, nil))
 		}
 	}
 }

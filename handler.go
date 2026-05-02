@@ -9,12 +9,10 @@ import (
 	"github.com/df-mc/dragonfly/server/item"
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/world"
-	_ "github.com/df-mc/we/act"
 	_ "github.com/df-mc/we/cmd"
 	"github.com/df-mc/we/editbrush"
 	"github.com/df-mc/we/history"
 	"github.com/df-mc/we/keys"
-	"github.com/df-mc/we/palette"
 	"github.com/df-mc/we/service"
 	"github.com/df-mc/we/session"
 	"github.com/df-mc/we/visual"
@@ -25,7 +23,6 @@ import (
 type Handler struct {
 	player.NopHandler
 	p              *player.Player
-	ph             *palette.Handler
 	selectionTrace visual.Wireframe
 
 	cfg Config
@@ -36,7 +33,7 @@ type Handler struct {
 func NewHandler(p *player.Player, opts ...Option) *Handler {
 	cfg := newConfig(opts)
 	session.EnsureWithSettings(p, cfg.HistoryLimit, cfg.SchematicStore, cfg.guardrails())
-	return &Handler{p: p, ph: palette.NewHandler(p), cfg: cfg}
+	return &Handler{p: p, cfg: cfg}
 }
 
 // HandleItemUse implements item use (brush raycast when bound).
@@ -48,8 +45,8 @@ func (h *Handler) HandleItemUse(ctx *player.Context) {
 	}
 }
 
-// HandleItemUseOnBlock sets pos2 with the wand or applies a brush to a block face.
-func (h *Handler) HandleItemUseOnBlock(ctx *player.Context, pos cube.Pos, face cube.Face, vec mgl64.Vec3) {
+// HandleItemUseOnBlock sets pos2 with the wand or applies a brush to the looked-at block.
+func (h *Handler) HandleItemUseOnBlock(ctx *player.Context, pos cube.Pos, _ cube.Face, _ mgl64.Vec3) {
 	if h.heldWand() {
 		ctx.Cancel()
 		s := session.Ensure(h.p)
@@ -61,10 +58,9 @@ func (h *Handler) HandleItemUseOnBlock(ctx *player.Context, pos cube.Pos, face c
 	}
 	if cfg, ok := h.heldBrush(); ok {
 		ctx.Cancel()
-		h.applyBrush(ctx.Val().Tx(), pos.Side(face), cfg)
+		h.applyBrush(ctx.Val().Tx(), pos, cfg)
 		return
 	}
-	h.ph.HandleItemUseOnBlock(ctx, pos, face, vec)
 }
 
 // HandleBlockBreak sets pos1 when breaking with the wand.
@@ -78,12 +74,10 @@ func (h *Handler) HandleBlockBreak(ctx *player.Context, pos cube.Pos, drops *[]i
 		h.traceSelection(s)
 		return
 	}
-	h.ph.HandleBlockBreak(ctx, pos, drops, xp)
 }
 
 // HandleQuit cleans up session state.
 func (h *Handler) HandleQuit(*player.Player) {
-	h.ph.HandleQuit()
 	h.selectionTrace.Remove(h.p)
 	session.Delete(h.p)
 }
@@ -123,7 +117,8 @@ var brushTraceBox = cube.Box(-0.125, -0.125, -0.125, 0.125, 0.125, 0.125)
 
 func (h *Handler) brushTarget(tx *world.Tx) cube.Pos {
 	start := h.p.Position().Add(mgl64.Vec3{0, h.p.EyeHeight()})
-	end := start.Add(h.p.Rotation().Vec3().Mul(h.cfg.BrushMaxDistance))
+	dir := h.p.Rotation().Vec3()
+	end := start.Add(dir.Mul(h.cfg.BrushMaxDistance))
 	filter := func(seq iter.Seq[world.Entity]) iter.Seq[world.Entity] {
 		return func(yield func(world.Entity) bool) {
 			for e := range seq {
@@ -137,7 +132,18 @@ func (h *Handler) brushTarget(tx *world.Tx) cube.Pos {
 		}
 	}
 	if res, ok := trace.Perform(start, end, tx, brushTraceBox, filter); ok {
-		return cube.PosFromVec3(res.Position())
+		return brushTargetFromTrace(res, dir)
 	}
 	return cube.PosFromVec3(end)
+}
+
+type blockTraceResult interface {
+	BlockPosition() cube.Pos
+}
+
+func brushTargetFromTrace(res trace.Result, dir mgl64.Vec3) cube.Pos {
+	if block, ok := res.(blockTraceResult); ok {
+		return block.BlockPosition()
+	}
+	return cube.PosFromVec3(res.Position().Sub(dir.Mul(1e-4)))
 }

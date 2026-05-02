@@ -129,6 +129,27 @@ func TestCopyPasteNoAirKeepsExistingBlocks(t *testing.T) {
 	})
 }
 
+func TestClearClipboardRemovesStoredClipboard(t *testing.T) {
+	var hasClipboard bool
+	var err error
+	withTx(t, func(tx *world.Tx) {
+		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 0, 0))
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Stone{}, nil)
+		_, err = service.Copy(tx, s, cube.Pos{}, cube.North, nil)
+		if err != nil {
+			return
+		}
+		service.ClearClipboard(s)
+		_, hasClipboard = s.Clipboard()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasClipboard {
+		t.Fatal("clipboard was not cleared")
+	}
+}
+
 func TestSelectionGuardrailRejectsLargeSelection(t *testing.T) {
 	withTx(t, func(tx *world.Tx) {
 		s := newFakeSession(geo.NewArea(0, 0, 0, 1, 0, 0))
@@ -210,6 +231,82 @@ func TestReplaceOnlyMatchingBlocks(t *testing.T) {
 	})
 }
 
+func TestOverlayCanPlaceAboveSelectionMaxY(t *testing.T) {
+	var changed int
+	var placed bool
+	var err error
+	withTx(t, func(tx *world.Tx) {
+		s := newFakeSession(geo.NewArea(0, 80, 0, 0, 80, 0))
+		tx.SetBlock(cube.Pos{0, 80, 0}, mcblock.Dirt{}, nil)
+		result, overlayErr := service.Overlay(tx, s, "stone")
+		changed, err = result.Changed, overlayErr
+		placed = parse.SameBlock(tx.Block(cube.Pos{0, 81, 0}), mcblock.Stone{})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed != 1 {
+		t.Fatalf("changed = %d, want 1", changed)
+	}
+	if !placed {
+		t.Fatal("overlay did not place above selected max Y")
+	}
+}
+
+func TestOverlayStillUsesSelectedColumnWhenHigherBlocksExist(t *testing.T) {
+	var changed int
+	var placedInSelection bool
+	var untouchedAbove bool
+	var err error
+	withTx(t, func(tx *world.Tx) {
+		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 0, 0))
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Dirt{}, nil)
+		tx.SetBlock(cube.Pos{0, 10, 0}, mcblock.Gold{}, nil)
+		result, overlayErr := service.Overlay(tx, s, "stone")
+		changed, err = result.Changed, overlayErr
+		placedInSelection = parse.SameBlock(tx.Block(cube.Pos{0, 1, 0}), mcblock.Stone{})
+		untouchedAbove = parse.SameBlock(tx.Block(cube.Pos{0, 10, 0}), mcblock.Gold{})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed != 1 || !placedInSelection || !untouchedAbove {
+		t.Fatalf("overlay changed=%d placed=%v untouchedAbove=%v, want selected placement only", changed, placedInSelection, untouchedAbove)
+	}
+}
+
+func TestRemoveAboveBelowAndNear(t *testing.T) {
+	var err error
+	var aboveAir, belowAir, nearAir, farKept bool
+	withTx(t, func(tx *world.Tx) {
+		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 0, 0))
+		center := cube.Pos{0, 10, 0}
+		tx.SetBlock(cube.Pos{0, 11, 0}, mcblock.Stone{}, nil)
+		tx.SetBlock(cube.Pos{0, 9, 0}, mcblock.Stone{}, nil)
+		tx.SetBlock(cube.Pos{1, 10, 0}, mcblock.Gold{}, nil)
+		tx.SetBlock(cube.Pos{4, 10, 0}, mcblock.Gold{}, nil)
+		if _, err = service.RemoveAbove(tx, s, center, []string{"1"}); err != nil {
+			return
+		}
+		if _, err = service.RemoveBelow(tx, s, center, []string{"1"}); err != nil {
+			return
+		}
+		if _, err = service.RemoveNear(tx, s, center, []string{"gold_block", "2"}); err != nil {
+			return
+		}
+		aboveAir = parse.IsAir(tx.Block(cube.Pos{0, 11, 0}))
+		belowAir = parse.IsAir(tx.Block(cube.Pos{0, 9, 0}))
+		nearAir = parse.IsAir(tx.Block(cube.Pos{1, 10, 0}))
+		farKept = parse.SameBlock(tx.Block(cube.Pos{4, 10, 0}), mcblock.Gold{})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !aboveAir || !belowAir || !nearAir || !farKept {
+		t.Fatalf("remove results above=%v below=%v near=%v farKept=%v", aboveAir, belowAir, nearAir, farKept)
+	}
+}
+
 func TestMoveShiftsSelectionAndClearsSource(t *testing.T) {
 	withTx(t, func(tx *world.Tx) {
 		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 0, 0))
@@ -253,44 +350,74 @@ func TestStackCopiesSelectionByAreaSize(t *testing.T) {
 	})
 }
 
-func TestRotateTurnsSelectionAroundCenter(t *testing.T) {
+func TestRotateTurnsClipboardWithoutChangingWorld(t *testing.T) {
+	var changed int
+	var err error
+	var worldChanged bool
+	var pasted bool
 	withTx(t, func(tx *world.Tx) {
-		s := newFakeSession(geo.NewArea(0, 0, 0, 2, 0, 2))
-		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Stone{}, nil)
-
-		result, err := service.Rotate(tx, s, []string{"90", "y"})
+		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 0, 1))
+		tx.SetBlock(cube.Pos{0, 0, 1}, mcblock.Stone{}, nil)
+		_, err = service.Copy(tx, s, cube.Pos{0, 0, 0}, cube.North, nil)
 		if err != nil {
-			t.Fatal(err)
+			return
 		}
-		if result.Changed == 0 {
-			t.Fatal("rotate recorded no changes")
+		result, rotateErr := service.Rotate(tx, s, []string{"90", "y"})
+		changed, err = result.Changed, rotateErr
+		worldChanged = !parse.SameBlock(tx.Block(cube.Pos{0, 0, 1}), mcblock.Stone{})
+		if err != nil {
+			return
 		}
-		if !parse.SameBlock(tx.Block(cube.Pos{2, 0, 0}), mcblock.Stone{}) {
-			t.Fatal("stone did not rotate to expected position")
-		}
+		_, err = service.Paste(tx, s, cube.Pos{10, 0, 0}, cube.North, nil)
+		pasted = parse.SameBlock(tx.Block(cube.Pos{-1, 0, 0}.Add(cube.Pos{10, 0, 0})), mcblock.Stone{})
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed != 2 {
+		t.Fatalf("changed = %d, want 2 clipboard entries", changed)
+	}
+	if worldChanged {
+		t.Fatal("rotate edited the world instead of only the clipboard")
+	}
+	if !pasted {
+		t.Fatal("rotated clipboard did not paste at expected offset")
+	}
 }
 
-func TestFlipMirrorsSelectionAcrossAxis(t *testing.T) {
+func TestFlipMirrorsClipboardWithoutChangingWorld(t *testing.T) {
+	var changed int
+	var err error
+	var worldChanged bool
+	var pasted bool
 	withTx(t, func(tx *world.Tx) {
 		s := newFakeSession(geo.NewArea(0, 0, 0, 1, 0, 0))
-		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Stone{}, nil)
-		tx.SetBlock(cube.Pos{1, 0, 0}, mcblock.Dirt{}, nil)
-
-		result, err := service.Flip(tx, s, "x")
+		tx.SetBlock(cube.Pos{1, 0, 0}, mcblock.Stone{}, nil)
+		_, err = service.Copy(tx, s, cube.Pos{0, 0, 0}, cube.North, nil)
 		if err != nil {
-			t.Fatal(err)
+			return
 		}
-		if result.Changed != 2 {
-			t.Fatalf("changed = %d, want 2", result.Changed)
+		result, flipErr := service.Flip(tx, s, "x")
+		changed, err = result.Changed, flipErr
+		worldChanged = !parse.SameBlock(tx.Block(cube.Pos{1, 0, 0}), mcblock.Stone{})
+		if err != nil {
+			return
 		}
-		if !parse.SameBlock(tx.Block(cube.Pos{0, 0, 0}), mcblock.Dirt{}) {
-			t.Fatal("left block was not mirrored")
-		}
-		if !parse.SameBlock(tx.Block(cube.Pos{1, 0, 0}), mcblock.Stone{}) {
-			t.Fatal("right block was not mirrored")
-		}
+		_, err = service.Paste(tx, s, cube.Pos{10, 0, 0}, cube.North, nil)
+		pasted = parse.SameBlock(tx.Block(cube.Pos{9, 0, 0}), mcblock.Stone{})
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed != 2 {
+		t.Fatalf("changed = %d, want 2 clipboard entries", changed)
+	}
+	if worldChanged {
+		t.Fatal("flip edited the world instead of only the clipboard")
+	}
+	if !pasted {
+		t.Fatal("flipped clipboard did not paste at expected offset")
+	}
 }
 
 func TestLineDrawsBetweenSelectionCorners(t *testing.T) {
@@ -310,6 +437,39 @@ func TestLineDrawsBetweenSelectionCorners(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestNaturalizeBuildsGrassDirtStoneLayers(t *testing.T) {
+	var err error
+	var topGrass, dirtLayer, stoneLayer bool
+	withTx(t, func(tx *world.Tx) {
+		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 5, 0))
+		for y := 0; y <= 4; y++ {
+			tx.SetBlock(cube.Pos{0, y, 0}, mcblock.Gold{}, nil)
+		}
+		_, err = service.Naturalize(tx, s)
+		topGrass = parse.SameBlock(tx.Block(cube.Pos{0, 4, 0}), mcblock.Grass{})
+		dirtLayer = parse.SameBlock(tx.Block(cube.Pos{0, 3, 0}), mcblock.Dirt{})
+		stoneLayer = parse.SameBlock(tx.Block(cube.Pos{0, 0, 0}), mcblock.Stone{})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !topGrass || !dirtLayer || !stoneLayer {
+		t.Fatalf("naturalize layers top=%v dirt=%v stone=%v", topGrass, dirtLayer, stoneLayer)
+	}
+}
+
+func TestSearchItemsFindsRegisteredNames(t *testing.T) {
+	matches := service.SearchItems("stone", 5)
+	if len(matches) == 0 {
+		t.Fatal("expected stone search matches")
+	}
+	for _, match := range matches {
+		if !strings.Contains(match, "stone") {
+			t.Fatalf("match %q does not contain query", match)
+		}
+	}
 }
 
 func TestParseShapeArgsForCubeAndErrors(t *testing.T) {
