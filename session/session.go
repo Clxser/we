@@ -2,6 +2,7 @@ package session
 
 import (
 	"sync"
+	"time"
 
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/player"
@@ -13,18 +14,23 @@ import (
 	"github.com/google/uuid"
 )
 
-const DefaultHistoryLimit = 40
+const (
+	DefaultHistoryLimit = 40
+	ClipboardRetention  = 24 * time.Hour
+)
 
 // Session contains per-player world-edit state.
 type Session struct {
 	p *player.Player
 
-	mu         sync.Mutex
-	selection  Selection
-	clipboard  *edit.Clipboard
-	schematics edit.SchematicStore
-	guardrails guardrail.Limits
-	history    *history.History
+	mu             sync.Mutex
+	selection      Selection
+	clipboard      *edit.Clipboard
+	schematics     edit.SchematicStore
+	guardrails     guardrail.Limits
+	history        *history.History
+	historyLimit   int
+	disconnectedAt time.Time
 }
 
 // Selection is the cuboid corners before normalisation.
@@ -49,9 +55,7 @@ func key(p *player.Player) uuid.UUID {
 
 // Lookup returns the session for a player if present.
 func Lookup(p *player.Player) (*Session, bool) {
-	v, _ := sessions.Load(key(p))
-	s, ok := v.(*Session)
-	return s, ok
+	return lookupID(key(p), time.Now())
 }
 
 // Ensure returns the session for p, creating one with the default history limit if needed.
@@ -80,18 +84,73 @@ func EnsureWithSettings(p *player.Player, historyLimit int, schematics edit.Sche
 		guardrails = limits[0]
 	}
 	if s, ok := Lookup(p); ok {
+		s.attach(p)
 		s.SetSchematicStore(schematics)
 		s.SetGuardrails(guardrails)
 		return s
 	}
-	s := &Session{p: p, schematics: schematics, guardrails: guardrails, history: history.NewHistory(historyLimit)}
+	s := &Session{p: p, schematics: schematics, guardrails: guardrails, history: history.NewHistory(historyLimit), historyLimit: historyLimit}
 	sessions.Store(key(p), s)
 	return s
 }
 
-// Delete removes state when the player leaves.
+// Delete releases online-only state when the player leaves. Clipboards remain
+// available for ClipboardRetention so players can reconnect and paste during
+// the same server lifetime.
 func Delete(p *player.Player) {
-	sessions.Delete(key(p))
+	releaseID(key(p), time.Now())
+}
+
+func lookupID(id uuid.UUID, now time.Time) (*Session, bool) {
+	v, ok := sessions.Load(id)
+	if !ok {
+		return nil, false
+	}
+	s, ok := v.(*Session)
+	if !ok {
+		sessions.Delete(id)
+		return nil, false
+	}
+	if s.expired(now) {
+		sessions.Delete(id)
+		return nil, false
+	}
+	return s, true
+}
+
+func releaseID(id uuid.UUID, now time.Time) {
+	v, ok := sessions.Load(id)
+	if !ok {
+		return
+	}
+	s, ok := v.(*Session)
+	if !ok {
+		sessions.Delete(id)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.clipboard == nil {
+		sessions.Delete(id)
+		return
+	}
+	s.p = nil
+	s.selection = Selection{}
+	s.history = history.NewHistory(s.historyLimit)
+	s.disconnectedAt = now
+}
+
+func (s *Session) attach(p *player.Player) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.p = p
+	s.disconnectedAt = time.Time{}
+}
+
+func (s *Session) expired(now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.disconnectedAt.IsZero() && !now.Before(s.disconnectedAt.Add(ClipboardRetention))
 }
 
 // SetPos1 sets position 1.

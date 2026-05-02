@@ -77,7 +77,8 @@ func (h *Handler) HandleBlockBreak(ctx *player.Context, pos cube.Pos, drops *[]i
 	}
 }
 
-// HandleQuit cleans up session state.
+// HandleQuit releases online-only session state while allowing clipboard
+// retention for reconnects during the same server lifetime.
 func (h *Handler) HandleQuit(*player.Player) {
 	h.selectionTrace.Remove(h.p)
 	session.Delete(h.p)
