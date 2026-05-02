@@ -1,8 +1,24 @@
 # we
 
-World editing library for [Dragonfly](https://github.com/df-mc/dragonfly). Import `github.com/df-mc/we` and attach `we.NewHandler` to players. Commands register when the `cmd` package loads (the root package blank-imports `_ "github.com/df-mc/we/cmd"`).
+World editing library for [Dragonfly](https://github.com/df-mc/dragonfly).
 
 On Bedrock, WorldEdit-style commands are typed with a double slash (`//set`, `//copy`, …). Dragonfly strips one leading slash so the registered names are `/set`, `/copy`, etc.
+
+## Setup
+
+Import the package and attach `we.NewHandler` to each player. Commands register
+automatically through the `we` package's blank import of `we/cmd`, so server
+owners do not need to call any registration function themselves.
+
+```go
+import "github.com/df-mc/we"
+
+// inside the player join callback
+p.Handle(we.NewHandler(p))
+```
+
+That single line is enough to register all `//`-prefixed commands and let
+players bind brushes to held items.
 
 ## Architecture
 
@@ -20,6 +36,7 @@ framework:
 - `cmd`, `handler.go`, and `editbrush` are Dragonfly adapters. They
   translate player commands, forms, item metadata, and events into service/core
   operations.
+- `guardrail` holds opt-in limits surfaced through `we.Config`.
 
 Keep new features in that shape: add reusable block mutation logic to `edit`,
 coordinate user-facing operations through `service`, store player state through
@@ -27,10 +44,23 @@ coordinate user-facing operations through `service`, store player state through
 
 ## Configuration
 
-`we.NewHandler` accepts optional Go configuration. Defaults preserve existing
-behavior: 40 history entries per stack, a filesystem schematic store rooted at
-`.we-schematics`, and a 128-block brush raycast distance. Guardrail fields
-default to `0`, which means unlimited and is reserved for opt-in safety limits.
+`we.NewHandler` accepts variadic Go options. Calling it with no options is a
+sensible default for development servers; production servers usually opt in to
+guardrails and may swap the schematic store.
+
+| Option | Default | What it controls |
+|--------|---------|------------------|
+| `WithHistoryLimit(n)` | `40` | Undo/redo stack cap per player. Values `<= 0` keep the default. |
+| `WithSchematicDirectory(dir)` | `.we-schematics` | Directory used by the default filesystem schematic store. Empty keeps the default. |
+| `WithSchematicStore(store)` | filesystem | Custom `edit.SchematicStore` implementation; see below. `nil` keeps the default. |
+| `WithBrushMaxDistance(d)` | `128` | Maximum raycast distance for item-bound brushes. Values `<= 0` keep the default. |
+| `WithMaxSelectionVolume(n)` | `0` (unlimited) | Reject selections with more blocks than `n`. |
+| `WithMaxShapeVolume(n)` | `0` (unlimited) | Reject shape commands whose bounding volume exceeds `n`. |
+| `WithMaxBrushVolume(n)` | `0` (unlimited) | Reject brush configurations whose footprint exceeds `n`. |
+| `WithMaxStackCopies(n)` | `0` (unlimited) | Reject `//stack` requests beyond `n` copies. |
+
+Every guardrail uses `0` to mean **unlimited**. There is no special "off" value
+beyond that, and no need to opt out explicitly.
 
 ```go
 p.Handle(we.NewHandler(p,
@@ -44,9 +74,14 @@ p.Handle(we.NewHandler(p,
 ))
 ```
 
-Servers that need non-filesystem schematic persistence can provide a custom
-`edit.SchematicStore` with `we.WithSchematicStore(...)`. Leave guardrail options
-at `0` to keep them unlimited.
+### Custom schematic store
+
+`edit.SchematicStore` is a small interface (`Save`, `Load`, `Delete`, `List`)
+for persisting clipboards by name. Servers that need database-backed or remote
+storage implement it on their own type and pass an instance via
+`we.WithSchematicStore`. The `//schematic` command and the schematic brush both
+go through this interface, so a custom store is picked up everywhere
+automatically.
 
 ## Selection
 
