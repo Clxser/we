@@ -1,4 +1,4 @@
-package editbrush
+package service
 
 import (
 	"github.com/df-mc/dragonfly/server/block/cube"

@@ -1,6 +1,6 @@
-// Package editbrush implements item-bound WorldEdit brushes.
+// Package editbrush contains item-bound brush adapters.
 //
-// The package is split into config/form adapters and brush application logic.
-// Brush application should delegate reusable block mutation behavior to edit
-// and history instead of duplicating command behavior.
+// This package owns form rendering and item metadata compatibility. Reusable
+// brush execution lives in service; keep new mutation behavior out of this
+// adapter package.
 package editbrush

@@ -69,7 +69,7 @@ func (c BrushCommand) Run(src dcf.Source, o *dcf.Output, _ *world.Tx) {
 		o.Print("Opened brush menu.")
 		return
 	}
-	cfg := editbrush.DefaultBrushConfig()
+	cfg := service.DefaultBrushConfig()
 	cfg.Type = strings.ToLower(args[0])
 	cfg.Shape = cfg.Type
 	if len(args) > 1 {
@@ -78,7 +78,7 @@ func (c BrushCommand) Run(src dcf.Source, o *dcf.Output, _ *world.Tx) {
 			o.Error(err)
 			return
 		}
-		cfg.Blocks = editbrush.StatesFromBlocks(blocks)
+		cfg.Blocks = service.StatesFromBlocks(blocks)
 	}
 	if len(args) > 2 {
 		if r, err := strconv.Atoi(args[2]); err == nil {

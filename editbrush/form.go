@@ -7,14 +7,15 @@ import (
 	"github.com/df-mc/dragonfly/server/player/form"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/parse"
+	"github.com/df-mc/we/service"
 )
 
 // SendBrushForm shows the brush configuration form. Submitting binds the resulting
 // BrushConfig to the player's held item.
 func SendBrushForm(p *player.Player) {
 	p.SendForm(form.New(brushConfigForm{
-		Type:            form.NewDropdown("Brush type", brushTypes, 0),
-		Shape:           form.NewDropdown("Footprint shape", brushShapes, 0),
+		Type:            form.NewDropdown("Brush type", service.BrushTypes(), 0),
+		Shape:           form.NewDropdown("Footprint shape", service.BrushShapes(), 0),
 		Mode:            form.NewDropdown("Mode", []string{"erode", "expand"}, 0),
 		Blocks:          form.NewInput("Blocks", "stone", "stone,dirt"),
 		From:            form.NewInput("Replace/from blocks", "", "all or stone,dirt"),
@@ -78,16 +79,16 @@ func (f brushConfigForm) Submit(submitter form.Submitter, _ *world.Tx) {
 			return
 		}
 	}
-	cfg := BrushConfig{
-		Type:            brushTypes[f.Type.Value()],
-		Shape:           brushShapes[f.Shape.Value()],
+	cfg := service.BrushConfig{
+		Type:            service.BrushTypes()[f.Type.Value()],
+		Shape:           service.BrushShapes()[f.Shape.Value()],
 		Mode:            []string{"erode", "expand"}[f.Mode.Value()],
 		Radius:          int(f.Radius.Value()),
 		Height:          int(f.Height.Value()),
 		Length:          int(f.Length.Value()),
 		Width:           int(f.Width.Value()),
-		Blocks:          StatesFromBlocks(blocks),
-		From:            StatesFromBlocks(from),
+		Blocks:          service.StatesFromBlocks(blocks),
+		From:            service.StatesFromBlocks(from),
 		Thickness:       int(f.Thickness.Value()),
 		Range:           int(f.Range.Value()),
 		Strength:        f.Strength.Value() / 100,

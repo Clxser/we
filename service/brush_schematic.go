@@ -1,4 +1,4 @@
-package editbrush
+package service
 
 import (
 	"fmt"

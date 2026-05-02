@@ -1,4 +1,4 @@
-package editbrush
+package service
 
 import (
 	"math"
@@ -8,7 +8,6 @@ import (
 
 	mcblock "github.com/df-mc/dragonfly/server/block"
 	"github.com/df-mc/dragonfly/server/block/cube"
-	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/edit"
 	"github.com/df-mc/we/history"
@@ -24,8 +23,8 @@ func applyPaint(tx *world.Tx, target cube.Pos, cfg BrushConfig, blocks []world.B
 	})
 }
 
-func applyPushPull(tx *world.Tx, p *player.Player, target cube.Pos, cfg BrushConfig, pull bool, batch *history.Batch) {
-	dir := dominantDir(target, cube.PosFromVec3(p.Position()))
+func applyPushPull(tx *world.Tx, actor BrushActor, target cube.Pos, cfg BrushConfig, pull bool, batch *history.Batch) {
+	dir := dominantDir(target, cube.PosFromVec3(actor.Position))
 	if !pull {
 		dir = cube.Pos{-dir[0], -dir[1], -dir[2]}
 	}

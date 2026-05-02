@@ -14,11 +14,12 @@ framework:
   form dependencies.
 - `session` owns per-player application state: selections, clipboard, and undo
   stacks.
-- `service` coordinates use-case validation, history recording, and calls into
-  the core packages without depending on Dragonfly command/form adapters.
+- `service` coordinates use-case validation, history recording, brush execution,
+  and calls into the core packages without depending on Dragonfly command/form
+  adapters.
 - `cmd`, `handler.go`, `editbrush`, `palette`, and legacy `brush`/`act` code are
   Dragonfly adapters. They translate player commands, forms, item metadata, and
-  events into core edit operations.
+  events into service/core operations.
 
 Keep new features in that shape: add reusable block mutation logic to `edit`,
 coordinate user-facing operations through `service`, store player state through

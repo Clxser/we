@@ -15,6 +15,7 @@ import (
 	"github.com/df-mc/we/history"
 	"github.com/df-mc/we/keys"
 	"github.com/df-mc/we/palette"
+	"github.com/df-mc/we/service"
 	"github.com/df-mc/we/session"
 	"github.com/df-mc/we/visual"
 	"github.com/go-gl/mathgl/mgl64"
@@ -27,7 +28,7 @@ type Handler struct {
 	ph             *palette.Handler
 	selectionTrace visual.Wireframe
 
-  cfg Config
+	cfg Config
 }
 
 // NewHandler returns a player handler. WorldEdit commands register when the
@@ -104,14 +105,14 @@ func (h *Handler) heldWand() bool {
 	return ok
 }
 
-func (h *Handler) heldBrush() (editbrush.BrushConfig, bool) {
+func (h *Handler) heldBrush() (service.BrushConfig, bool) {
 	held, _ := h.p.HeldItems()
 	return editbrush.ConfigFromItem(held)
 }
 
-func (h *Handler) applyBrush(tx *world.Tx, target cube.Pos, cfg editbrush.BrushConfig) {
+func (h *Handler) applyBrush(tx *world.Tx, target cube.Pos, cfg service.BrushConfig) {
 	batch := history.NewBatch(true)
-	if err := editbrush.ApplyBrushWithSettings(tx, h.p, target, cfg, h.cfg.SchematicStore, h.cfg.guardrails(), batch); err != nil {
+	if err := service.ApplyBrush(tx, service.BrushActor{Position: h.p.Position(), Rotation: h.p.Rotation()}, target, cfg, h.cfg.SchematicStore, h.cfg.guardrails(), batch); err != nil {
 		h.p.Message(err.Error())
 		return
 	}

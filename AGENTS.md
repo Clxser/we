@@ -77,3 +77,29 @@ the same behavior can be verified without framework setup.
 - `AGENTS.md` and `plan.md` are local-only guidance files in this checkout.
   Never stage, commit, push, or include them in pull requests unless the user
   explicitly overrides this rule in the same request.
+
+## API boundaries and wrappers
+
+Avoid type aliases, forwarding wrappers, and compatibility shims that only hide a
+package move or add another name for the same behavior. Do not add patterns like:
+
+```go
+type SomeConfig = otherpkg.SomeConfig
+
+func DoThing(...) error {
+	return otherpkg.DoThing(...)
+}
+```
+
+unless they provide a real compatibility boundary, reduce caller churn during a
+migration, preserve a public API intentionally, or make an adapter boundary
+clearer. Prefer moving callers to the owning package when the wrapper is not
+pulling its weight.
+
+## Shared metadata
+
+Keep supported values, option lists, and behavior metadata in one owning package.
+Avoid copying parallel string lists across adapters and services (for example one
+list for forms and another switch/list for guardrails). Prefer a single
+metadata table plus small accessors or predicates, and let adapters read from
+that owner.
