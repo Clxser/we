@@ -45,7 +45,7 @@ func (h *Handler) HandleItemUse(ctx *player.Context) {
 		if h.applyBrush(ctx.Val().Tx(), target, cfg) {
 			h.traceBrush(start, target, cfg)
 		} else {
-			h.brushTrace.Remove(h.p)
+			h.brushTrace.RemoveAsync(h.p)
 		}
 		return
 	}
@@ -68,7 +68,7 @@ func (h *Handler) HandleItemUseOnBlock(ctx *player.Context, pos cube.Pos, face c
 		if h.applyBrush(ctx.Val().Tx(), target, cfg) {
 			h.traceBrush(h.brushRayStart(), target, cfg)
 		} else {
-			h.brushTrace.Remove(h.p)
+			h.brushTrace.RemoveAsync(h.p)
 		}
 		return
 	}
@@ -90,18 +90,18 @@ func (h *Handler) HandleBlockBreak(ctx *player.Context, pos cube.Pos, drops *[]i
 // HandleQuit releases online-only session state while allowing clipboard
 // retention for reconnects during the same server lifetime.
 func (h *Handler) HandleQuit(*player.Player) {
-	h.selectionTrace.Remove(h.p)
-	h.brushTrace.Remove(h.p)
+	h.selectionTrace.RemoveAsync(h.p)
+	h.brushTrace.RemoveAsync(h.p)
 	session.Delete(h.p)
 }
 
 func (h *Handler) traceSelection(s *session.Session) {
 	area, ok := s.SelectionArea()
 	if !ok {
-		h.selectionTrace.Remove(h.p)
+		h.selectionTrace.RemoveAsync(h.p)
 		return
 	}
-	h.selectionTrace.Draw(h.p, visual.AreaSegments(area), selectionTraceColour)
+	h.selectionTrace.DrawAsync(h.p, visual.AreaSegments(area), selectionTraceColour)
 }
 
 var selectionTraceColour = color.RGBA{R: 0, G: 255, B: 255, A: 255}
@@ -140,7 +140,7 @@ func (h *Handler) traceBrush(start mgl64.Vec3, target cube.Pos, cfg service.Brus
 	} else {
 		segments = append(segments, visual.BlockSegments(target, target)...)
 	}
-	h.brushTrace.Draw(h.p, segments, brushTraceColour)
+	h.brushTrace.DrawAsync(h.p, segments, brushTraceColour)
 }
 
 func (h *Handler) brushTarget(tx *world.Tx, cfg service.BrushConfig, start mgl64.Vec3) cube.Pos {
