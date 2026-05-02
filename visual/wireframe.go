@@ -35,19 +35,6 @@ func (w *Wireframe) Draw(r debug.Renderer, segments []Segment, colour color.RGBA
 	w.drawLocked(r, segments, colour)
 }
 
-// DrawAsync draws or updates the wireframe without blocking the caller on the
-// renderer. Dragonfly's debug renderer queues through bounded channels, so item
-// handlers should use this method to avoid stalling player/world processing if
-// the renderer back-pressure queue is full.
-func (w *Wireframe) DrawAsync(r debug.Renderer, segments []Segment, colour color.RGBA) {
-	segments = append([]Segment(nil), segments...)
-	go func() {
-		w.mu.Lock()
-		defer w.mu.Unlock()
-		w.drawLocked(r, segments, colour)
-	}()
-}
-
 func (w *Wireframe) drawLocked(r debug.Renderer, segments []Segment, colour color.RGBA) {
 	w.removeExtra(r, len(segments))
 
@@ -67,16 +54,6 @@ func (w *Wireframe) Remove(r debug.Renderer) {
 	defer w.mu.Unlock()
 
 	w.removeLocked(r)
-}
-
-// RemoveAsync removes all lines in the wireframe without blocking the caller on
-// renderer back-pressure.
-func (w *Wireframe) RemoveAsync(r debug.Renderer) {
-	go func() {
-		w.mu.Lock()
-		defer w.mu.Unlock()
-		w.removeLocked(r)
-	}()
 }
 
 func (w *Wireframe) removeLocked(r debug.Renderer) {
