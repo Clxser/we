@@ -49,6 +49,10 @@ func (s uniformBlockStructure) At(_, _, _ int, _ func(x, y, z int) world.Block) 
 	return s.block, s.liq
 }
 
+func (s uniformBlockStructure) Uniform() (world.Block, world.Liquid, bool) {
+	return s.block, s.liq, true
+}
+
 type blockFuncStructure struct {
 	min     cube.Pos
 	d       [3]int
