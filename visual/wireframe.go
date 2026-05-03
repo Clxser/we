@@ -2,6 +2,7 @@ package visual
 
 import (
 	"image/color"
+	"slices"
 	"sync"
 
 	"github.com/df-mc/dragonfly/server/player/debug"
@@ -26,6 +27,8 @@ func LineSegment(start, end mgl64.Vec3) Segment {
 type Wireframe struct {
 	mu           sync.Mutex
 	lines        []*debug.Line
+	segments     []Segment
+	colour       color.RGBA
 	asyncMu      sync.Mutex
 	asyncOp      *wireframeOp
 	asyncRunning bool
@@ -58,12 +61,21 @@ func (w *Wireframe) DrawAsync(r debug.Renderer, segments []Segment, colour color
 }
 
 func (w *Wireframe) drawLocked(r debug.Renderer, segments []Segment, colour color.RGBA) {
+	if w.sameDraw(segments, colour) {
+		return
+	}
 	w.removeLocked(r)
+	w.segments = append(w.segments[:0], segments...)
+	w.colour = colour
 	for _, segment := range segments {
 		line := &debug.Line{Colour: colour, Position: segment.Start, EndPosition: segment.End}
 		w.lines = append(w.lines, line)
 		r.AddDebugShape(line)
 	}
+}
+
+func (w *Wireframe) sameDraw(segments []Segment, colour color.RGBA) bool {
+	return len(w.lines) > 0 && w.colour == colour && slices.Equal(w.segments, segments)
 }
 
 // Remove removes all lines in the wireframe from r. It is safe to call even when
@@ -121,4 +133,5 @@ func (w *Wireframe) removeLocked(r debug.Renderer) {
 		r.RemoveDebugShape(line)
 	}
 	w.lines = nil
+	w.segments = nil
 }

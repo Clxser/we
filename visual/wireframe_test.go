@@ -91,6 +91,30 @@ func TestWireframeDrawCreatesAndShrinksLines(t *testing.T) {
 	}
 }
 
+func TestWireframeDrawSkipsUnchangedSegments(t *testing.T) {
+	r := &debugRenderer{}
+	var w Wireframe
+	segments := []Segment{{Start: mgl64.Vec3{0, 0, 0}, End: mgl64.Vec3{1, 0, 0}}}
+	colour := color.RGBA{R: 255, A: 255}
+
+	w.Draw(r, segments, colour)
+	w.Draw(r, segments, colour)
+	if len(r.added) != 1 {
+		t.Fatalf("added after unchanged redraw = %d, want 1", len(r.added))
+	}
+	if len(r.removed) != 0 {
+		t.Fatalf("removed after unchanged redraw = %d, want 0", len(r.removed))
+	}
+
+	w.Draw(r, segments, color.RGBA{G: 255, A: 255})
+	if len(r.added) != 2 {
+		t.Fatalf("added after colour change = %d, want 2", len(r.added))
+	}
+	if len(r.removed) != 1 {
+		t.Fatalf("removed after colour change = %d, want 1", len(r.removed))
+	}
+}
+
 func TestWireframeDrawDoesNotMutateQueuedLines(t *testing.T) {
 	r := &concurrentReadRenderer{stop: make(chan struct{}), done: make(chan struct{})}
 	var w Wireframe
