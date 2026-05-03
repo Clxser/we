@@ -7,6 +7,7 @@ import (
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/geo"
 	"github.com/df-mc/we/history"
+	"github.com/df-mc/we/parse"
 )
 
 // Clipboard is a captured selection used by copy, cut, paste, and schematic IO.
@@ -41,6 +42,30 @@ func PasteClipboard(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.Direc
 	}
 	pasteBuffer(tx, origin, entries, noAir, batch)
 	return nil
+}
+
+// PasteSubChunkCount returns how many unique 16x16x16 sub-chunks a paste would
+// touch. It mirrors PasteClipboard's rotation and -a air skipping so service
+// guardrails can reject pathological pastes before Dragonfly queues too many
+// client-cache blobs for one player.
+func PasteSubChunkCount(cb *Clipboard, origin cube.Pos, dir cube.Direction, noAir bool) int64 {
+	if cb == nil || len(cb.Entries) == 0 {
+		return 0
+	}
+	turns := rotationTurns(cb.OriginDir, dir)
+	seen := make(map[[3]int32]struct{})
+	for _, entry := range cb.Entries {
+		if noAir && parse.IsAir(entry.Block) && !entry.HasLiq {
+			continue
+		}
+		offset := entry.Offset
+		if turns != 0 {
+			offset = rotateOffset(offset, "y", turns)
+		}
+		pos := origin.Add(offset)
+		seen[[3]int32{int32(pos[0] >> 4), int32(pos[1] >> 4), int32(pos[2] >> 4)}] = struct{}{}
+	}
+	return int64(len(seen))
 }
 
 func rotationTurns(from, to cube.Direction) int {

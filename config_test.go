@@ -21,7 +21,7 @@ func TestDefaultConfigPreservesCurrentDefaults(t *testing.T) {
 	if cfg.BrushMaxDistance != defaultBrushMaxDistance {
 		t.Fatalf("BrushMaxDistance = %v, want %v", cfg.BrushMaxDistance, defaultBrushMaxDistance)
 	}
-	if cfg.MaxSelectionVolume != 0 || cfg.MaxShapeVolume != 0 || cfg.MaxBrushVolume != 0 || cfg.MaxStackCopies != 0 {
+	if cfg.MaxSelectionVolume != 0 || cfg.MaxShapeVolume != 0 || cfg.MaxBrushVolume != 0 || cfg.MaxStackCopies != 0 || cfg.MaxEditSubChunks != 0 {
 		t.Fatalf("guardrails should default to unlimited zero values: %+v", cfg)
 	}
 }
@@ -35,6 +35,7 @@ func TestOptionsOverrideConfig(t *testing.T) {
 		WithMaxShapeVolume(2),
 		WithMaxBrushVolume(3),
 		WithMaxStackCopies(4),
+		WithMaxEditSubChunks(5),
 	})
 	if cfg.HistoryLimit != 99 || cfg.SchematicDirectory != "schems" || cfg.BrushMaxDistance != 64 {
 		t.Fatalf("options did not apply: %+v", cfg)
@@ -42,7 +43,7 @@ func TestOptionsOverrideConfig(t *testing.T) {
 	if dir := schematicStoreDir(t, cfg.SchematicStore); dir != "schems" {
 		t.Fatalf("SchematicStore dir = %q, want schems", dir)
 	}
-	if cfg.MaxSelectionVolume != 1 || cfg.MaxShapeVolume != 2 || cfg.MaxBrushVolume != 3 || cfg.MaxStackCopies != 4 {
+	if cfg.MaxSelectionVolume != 1 || cfg.MaxShapeVolume != 2 || cfg.MaxBrushVolume != 3 || cfg.MaxStackCopies != 4 || cfg.MaxEditSubChunks != 5 {
 		t.Fatalf("guardrail options did not apply: %+v", cfg)
 	}
 }

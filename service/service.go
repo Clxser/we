@@ -63,7 +63,22 @@ type SchematicResult struct {
 	Changed int
 }
 
+// selectedArea returns the player's selection after enforcing both
+// selection-volume and edit-sub-chunk guardrails. Use for write paths.
 func selectedArea(s Session) (geo.Area, error) {
+	area, err := selectedReadArea(s)
+	if err != nil {
+		return geo.Area{}, err
+	}
+	if err := guardrailsFor(s).CheckEditSubChunks(area.SubChunkCount()); err != nil {
+		return geo.Area{}, err
+	}
+	return area, nil
+}
+
+// selectedReadArea enforces only the selection-volume guardrail. Use for read
+// paths like Copy and schematic create, which do not push client-cache blobs.
+func selectedReadArea(s Session) (geo.Area, error) {
 	area, ok := s.SelectionArea()
 	if !ok {
 		return geo.Area{}, ErrSelectionRequired
@@ -72,6 +87,13 @@ func selectedArea(s Session) (geo.Area, error) {
 		return geo.Area{}, err
 	}
 	return area, nil
+}
+
+func checkArea(limits guardrail.Limits, area geo.Area) error {
+	if err := limits.CheckSelectionVolume(area.Volume()); err != nil {
+		return err
+	}
+	return limits.CheckEditSubChunks(area.SubChunkCount())
 }
 
 type guardedSession interface {

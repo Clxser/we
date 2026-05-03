@@ -33,5 +33,8 @@ func applySchematicBrush(tx *world.Tx, target cube.Pos, dir cube.Direction, cfg 
 		dirs := []cube.Direction{cube.North, cube.East, cube.South, cube.West}
 		dir = dirs[rand.Intn(len(dirs))]
 	}
+	if err := limits.CheckEditSubChunks(edit.PasteSubChunkCount(cb, target, dir, cfg.NoAir)); err != nil {
+		return err
+	}
 	return edit.PasteClipboard(tx, cb, target, dir, cfg.NoAir, batch)
 }

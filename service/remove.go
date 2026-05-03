@@ -22,7 +22,7 @@ func RemoveAbove(tx *world.Tx, s Session, center cube.Pos, args []string) (Chang
 		return ChangeResult{}, err
 	}
 	area := geo.NewArea(center[0]-radius, center[1]+1, center[2]-radius, center[0]+radius, center[1]+height, center[2]+radius)
-	if err := guardrailsFor(s).CheckSelectionVolume(area.Volume()); err != nil {
+	if err := checkArea(guardrailsFor(s), area); err != nil {
 		return ChangeResult{}, err
 	}
 	batch := history.NewBatch(false)
@@ -37,7 +37,7 @@ func RemoveBelow(tx *world.Tx, s Session, center cube.Pos, args []string) (Chang
 		return ChangeResult{}, err
 	}
 	area := geo.NewArea(center[0]-radius, center[1]-height, center[2]-radius, center[0]+radius, center[1]-1, center[2]+radius)
-	if err := guardrailsFor(s).CheckSelectionVolume(area.Volume()); err != nil {
+	if err := checkArea(guardrailsFor(s), area); err != nil {
 		return ChangeResult{}, err
 	}
 	batch := history.NewBatch(false)
@@ -79,7 +79,7 @@ func RemoveNear(tx *world.Tx, s Session, center cube.Pos, args []string) (Change
 		return ChangeResult{}, err
 	}
 	area := geo.NewArea(center[0]-radius, center[1]-radius, center[2]-radius, center[0]+radius, center[1]+radius, center[2]+radius)
-	if err := guardrailsFor(s).CheckSelectionVolume(area.Volume()); err != nil {
+	if err := checkArea(guardrailsFor(s), area); err != nil {
 		return ChangeResult{}, err
 	}
 	batch := history.NewBatch(false)

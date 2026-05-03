@@ -42,7 +42,12 @@ func Shape(tx *world.Tx, s Session, anchor cube.Pos, kind edit.ShapeKind, args [
 	if err != nil {
 		return ChangeResult{}, err
 	}
-	if err := guardrailsFor(s).CheckShapeVolume(spec.Bounds(anchor).Volume()); err != nil {
+	bounds := spec.Bounds(anchor)
+	limits := guardrailsFor(s)
+	if err := limits.CheckShapeVolume(bounds.Volume()); err != nil {
+		return ChangeResult{}, err
+	}
+	if err := limits.CheckEditSubChunks(bounds.SubChunkCount()); err != nil {
 		return ChangeResult{}, err
 	}
 	batch := history.NewBatch(false)

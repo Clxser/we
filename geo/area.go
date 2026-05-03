@@ -56,6 +56,51 @@ func (a Area) Volume() int64 {
 	return int64(a.Dx()) * int64(a.Dy()) * int64(a.Dz())
 }
 
+// SubChunkCount returns how many unique 16x16x16 sub-chunks this area touches.
+// Dragonfly sends changed chunks to clients as sub-chunk cache blobs, so this is
+// a better estimate of one-tick network pressure than raw block volume.
+func (a Area) SubChunkCount() int64 {
+	dx := int64((a.Max[0] >> 4) - (a.Min[0] >> 4) + 1)
+	dy := int64((a.Max[1] >> 4) - (a.Min[1] >> 4) + 1)
+	dz := int64((a.Max[2] >> 4) - (a.Min[2] >> 4) + 1)
+	return dx * dy * dz
+}
+
+// UniqueSubChunks returns how many unique 16x16x16 sub-chunks are touched
+// across multiple areas.
+func UniqueSubChunks(areas ...Area) int64 {
+	if len(areas) == 0 {
+		return 0
+	}
+	if len(areas) == 1 {
+		return areas[0].SubChunkCount()
+	}
+	seen := make(map[[3]int]struct{})
+	for _, area := range areas {
+		for x := area.Min[0] >> 4; x <= area.Max[0]>>4; x++ {
+			for y := area.Min[1] >> 4; y <= area.Max[1]>>4; y++ {
+				for z := area.Min[2] >> 4; z <= area.Max[2]>>4; z++ {
+					seen[[3]int{x, y, z}] = struct{}{}
+				}
+			}
+		}
+	}
+	return int64(len(seen))
+}
+
+// Add returns the area translated by offset.
+func (a Area) Add(offset cube.Pos) Area {
+	return Area{Min: a.Min.Add(offset), Max: a.Max.Add(offset)}
+}
+
+// Union returns the smallest area that contains both a and b.
+func (a Area) Union(b Area) Area {
+	return NewArea(
+		min(a.Min[0], b.Min[0]), min(a.Min[1], b.Min[1]), min(a.Min[2], b.Min[2]),
+		max(a.Max[0], b.Max[0]), max(a.Max[1], b.Max[1]), max(a.Max[2], b.Max[2]),
+	)
+}
+
 // Range iterates over all points where Min.X <= X <= Max.X, Min.Y <= Y <= Max.Y,
 // and Min.Z <= Z <= Max.Z and calls f for every X, Y and Z.
 func (a Area) Range(f func(x, y, z int)) {

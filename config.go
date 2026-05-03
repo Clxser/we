@@ -9,8 +9,7 @@ import (
 const defaultBrushMaxDistance = 128
 
 // Config controls WorldEdit library behavior. Zero-valued guardrail fields are
-// intentionally unlimited so existing servers keep their current behavior unless
-// they opt in to limits.
+// unlimited.
 type Config struct {
 	// HistoryLimit caps the number of undo/redo batches kept per player stack.
 	HistoryLimit int
@@ -29,6 +28,10 @@ type Config struct {
 	MaxShapeVolume     int
 	MaxBrushVolume     int
 	MaxStackCopies     int
+	// MaxEditSubChunks caps how many unique 16x16x16 sub-chunks a single edit
+	// may touch. Use this to keep large edits below Dragonfly's pending
+	// client-cache blob queue. A value of 0 means unlimited.
+	MaxEditSubChunks int
 }
 
 // Option customises Config for a Handler.
@@ -73,6 +76,7 @@ func (c Config) guardrails() guardrail.Limits {
 		MaxShapeVolume:     c.MaxShapeVolume,
 		MaxBrushVolume:     c.MaxBrushVolume,
 		MaxStackCopies:     c.MaxStackCopies,
+		MaxEditSubChunks:   c.MaxEditSubChunks,
 	}
 }
 
@@ -127,4 +131,10 @@ func WithMaxBrushVolume(limit int) Option {
 // unlimited.
 func WithMaxStackCopies(limit int) Option {
 	return func(c *Config) { c.MaxStackCopies = limit }
+}
+
+// WithMaxEditSubChunks sets the cap for unique sub-chunks touched by one edit.
+// A value of 0 disables this client-cache safety check.
+func WithMaxEditSubChunks(limit int) Option {
+	return func(c *Config) { c.MaxEditSubChunks = limit }
 }

@@ -99,6 +99,17 @@ func TestSetRecordsUndoableChanges(t *testing.T) {
 	})
 }
 
+func TestSetSubChunkGuardrailRejectsLargeSelection(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		s := newFakeSession(geo.NewArea(0, 0, 0, 16, 0, 0))
+		s.guardrails = guardrail.Limits{MaxEditSubChunks: 1}
+
+		if _, err := service.Set(tx, s, "stone"); err == nil || !strings.Contains(err.Error(), "edit touches 2 sub-chunks") {
+			t.Fatalf("Set error = %v, want edit sub-chunk limit", err)
+		}
+	})
+}
+
 func TestCopyPasteNoAirKeepsExistingBlocks(t *testing.T) {
 	withTx(t, func(tx *world.Tx) {
 		s := newFakeSession(geo.NewArea(0, 0, 0, 1, 0, 0))
@@ -125,6 +136,39 @@ func TestCopyPasteNoAirKeepsExistingBlocks(t *testing.T) {
 		}
 		if !parse.SameBlock(tx.Block(cube.Pos{11, 0, 0}), mcblock.Dirt{}) {
 			t.Fatal("air clipboard block overwrote destination despite -a")
+		}
+	})
+}
+
+func TestPasteSubChunkGuardrailRejectsSparsePaste(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		source := geo.NewArea(0, 0, 0, 16, 0, 0)
+		s := newFakeSession(source)
+		s.guardrails = guardrail.Limits{MaxEditSubChunks: 1}
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Stone{}, nil)
+		tx.SetBlock(cube.Pos{16, 0, 0}, mcblock.Stone{}, nil)
+		if _, err := service.Copy(tx, s, cube.Pos{}, cube.North, []string{"only", "stone"}); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := service.Paste(tx, s, cube.Pos{0, 0, 16}, cube.North, nil); err == nil || !strings.Contains(err.Error(), "edit touches 2 sub-chunks") {
+			t.Fatalf("Paste error = %v, want paste sub-chunk limit", err)
+		}
+	})
+}
+
+func TestPasteSubChunkGuardrailHonoursNoAir(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		source := geo.NewArea(0, 0, 0, 16, 0, 0)
+		s := newFakeSession(source)
+		s.guardrails = guardrail.Limits{MaxEditSubChunks: 1}
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Stone{}, nil)
+		if _, err := service.Copy(tx, s, cube.Pos{}, cube.North, nil); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := service.Paste(tx, s, cube.Pos{0, 0, 16}, cube.North, []string{"-a"}); err != nil {
+			t.Fatalf("Paste with -a error = %v, want air entries ignored by guardrail", err)
 		}
 	})
 }
@@ -374,6 +418,25 @@ func TestMoveShiftsSelectionAndClearsSource(t *testing.T) {
 			t.Fatal("source block was not cleared")
 		}
 		if !parse.SameBlock(tx.Block(cube.Pos{1, 0, 0}), mcblock.Stone{}) {
+			t.Fatal("destination block was not moved")
+		}
+	})
+}
+
+func TestMoveSubChunkGuardrailCountsOnlySourceAndDestination(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 0, 0))
+		s.guardrails = guardrail.Limits{MaxEditSubChunks: 2}
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Stone{}, nil)
+
+		result, err := service.Move(tx, s, cube.Pos{1, 0, 0}, []string{"all", "256"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Changed != 2 {
+			t.Fatalf("changed = %d, want 2", result.Changed)
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{256, 0, 0}), mcblock.Stone{}) {
 			t.Fatal("destination block was not moved")
 		}
 	})

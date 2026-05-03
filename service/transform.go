@@ -7,6 +7,7 @@ import (
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/edit"
+	"github.com/df-mc/we/geo"
 	"github.com/df-mc/we/history"
 )
 
@@ -24,8 +25,12 @@ func Move(tx *world.Tx, s Session, dir cube.Pos, args []string) (ChangeResult, e
 	if err != nil {
 		return ChangeResult{}, err
 	}
-	area, err := selectedArea(s)
+	area, err := selectedReadArea(s)
 	if err != nil {
+		return ChangeResult{}, err
+	}
+	dest := area.Add(cube.Pos{dir[0] * dist, dir[1] * dist, dir[2] * dist})
+	if err := guardrailsFor(s).CheckEditSubChunks(geo.UniqueSubChunks(area, dest)); err != nil {
 		return ChangeResult{}, err
 	}
 	batch := history.NewBatch(false)
@@ -45,13 +50,25 @@ func Stack(tx *world.Tx, s Session, dir cube.Pos, args []string) (ChangeResult, 
 	if err := guardrailsFor(s).CheckStackCopies(amount); err != nil {
 		return ChangeResult{}, err
 	}
-	area, err := selectedArea(s)
+	area, err := selectedReadArea(s)
 	if err != nil {
+		return ChangeResult{}, err
+	}
+	if err := guardrailsFor(s).CheckEditSubChunks(stackEditBounds(area, dir, amount).SubChunkCount()); err != nil {
 		return ChangeResult{}, err
 	}
 	batch := history.NewBatch(false)
 	edit.Stack(tx, area, dir, amount, HasFlag(args[1:], "-a"), batch)
 	return record(s, batch), nil
+}
+
+func stackEditBounds(area geo.Area, dir cube.Pos, amount int) geo.Area {
+	if amount <= 0 {
+		return area
+	}
+	step := cube.Pos{dir[0] * area.Dx(), dir[1] * area.Dy(), dir[2] * area.Dz()}
+	last := cube.Pos{step[0] * amount, step[1] * amount, step[2] * amount}
+	return area.Add(step).Union(area.Add(last))
 }
 
 // Rotate rotates the clipboard by args[0] degrees (90, 180, 270, or 360)

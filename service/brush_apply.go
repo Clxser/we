@@ -31,6 +31,9 @@ func ApplyBrush(tx *world.Tx, actor BrushActor, target cube.Pos, cfg BrushConfig
 		if err := limits.CheckBrushVolume(bounds.Volume()); err != nil {
 			return err
 		}
+		if err := limits.CheckEditSubChunks(bounds.SubChunkCount()); err != nil {
+			return err
+		}
 	}
 	switch brushType {
 	case BrushSphere, BrushCylinder, BrushPyramid, BrushCone, BrushCube:

@@ -39,3 +39,15 @@ func TestAreaRangeVisitsInclusiveNormalisedArea(t *testing.T) {
 		t.Fatalf("Range visited %v, want %v", got, want)
 	}
 }
+
+func TestSubChunkCountCountsUniqueTouchedSubChunks(t *testing.T) {
+	a := NewArea(0, 0, 0, 16, 0, 0)
+	if got := a.SubChunkCount(); got != 2 {
+		t.Fatalf("SubChunkCount() = %d, want 2", got)
+	}
+
+	b := NewArea(256, 0, 0, 256, 0, 0)
+	if got := UniqueSubChunks(a, b); got != 3 {
+		t.Fatalf("UniqueSubChunks(a, b) = %d, want 3 unique sub-chunks", got)
+	}
+}
