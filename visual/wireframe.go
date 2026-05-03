@@ -23,26 +23,19 @@ func LineSegment(start, end mgl64.Vec3) Segment {
 // primitive for selection outlines, paste previews, and other predicted shapes:
 // callers provide whatever segments describe the thing they want to preview.
 //
-// A Wireframe must not be copied after first use.
+// A Wireframe must not be copied after first use. Draw and Remove calls should
+// originate from the world tick goroutine, such as a player handler or world.Tx
+// callback, because Dragonfly drains debug-shape updates on that goroutine.
 type Wireframe struct {
-	mu           sync.Mutex
-	lines        []*debug.Line
-	segments     []Segment
-	colour       color.RGBA
-	asyncMu      sync.Mutex
-	asyncOp      *wireframeOp
-	asyncRunning bool
-}
-
-type wireframeOp struct {
-	renderer debug.Renderer
+	mu       sync.Mutex
+	lines    []*debug.Line
 	segments []Segment
 	colour   color.RGBA
-	remove   bool
 }
 
-// Draw draws or updates the wireframe on r. If fewer segments are supplied than
-// in the previous draw, stale lines are removed automatically.
+// Draw draws or updates the wireframe on r. Existing line slots are upserted
+// with stable debug shape IDs. If fewer segments are supplied than in the
+// previous draw, stale lines are removed automatically.
 func (w *Wireframe) Draw(r debug.Renderer, segments []Segment, colour color.RGBA) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -50,28 +43,33 @@ func (w *Wireframe) Draw(r debug.Renderer, segments []Segment, colour color.RGBA
 	w.drawLocked(r, segments, colour)
 }
 
-// DrawAsync draws or updates the wireframe without blocking the caller on the
-// renderer. Calls are coalesced through one ephemeral worker goroutine per
-// Wireframe, so only the latest pending draw/remove is kept while a renderer is
-// blocked. The renderer must remain valid until the worker drains. The caller
-// may reuse or mutate segments after this returns.
-func (w *Wireframe) DrawAsync(r debug.Renderer, segments []Segment, colour color.RGBA) {
-	segments = append([]Segment(nil), segments...)
-	w.enqueue(wireframeOp{renderer: r, segments: segments, colour: colour})
-}
-
 func (w *Wireframe) drawLocked(r debug.Renderer, segments []Segment, colour color.RGBA) {
 	if w.sameDraw(segments, colour) {
 		return
 	}
-	w.removeLocked(r)
-	w.segments = append(w.segments[:0], segments...)
-	w.colour = colour
-	for _, segment := range segments {
-		line := &debug.Line{Colour: colour, Position: segment.Start, EndPosition: segment.End}
-		w.lines = append(w.lines, line)
+	for len(w.lines) > len(segments) {
+		i := len(w.lines) - 1
+		r.RemoveDebugShape(w.lines[i])
+		w.lines = w.lines[:i]
+	}
+	for i, segment := range segments {
+		if i == len(w.lines) {
+			line := &debug.Line{Colour: colour, Position: segment.Start, EndPosition: segment.End}
+			w.lines = append(w.lines, line)
+			r.AddDebugShape(line)
+			continue
+		}
+		if w.colour == colour && i < len(w.segments) && w.segments[i] == segment {
+			continue
+		}
+		line := w.lines[i]
+		line.Colour = colour
+		line.Position = segment.Start
+		line.EndPosition = segment.End
 		r.AddDebugShape(line)
 	}
+	w.segments = append(w.segments[:0], segments...)
+	w.colour = colour
 }
 
 func (w *Wireframe) sameDraw(segments []Segment, colour color.RGBA) bool {
@@ -85,44 +83,6 @@ func (w *Wireframe) Remove(r debug.Renderer) {
 	defer w.mu.Unlock()
 
 	w.removeLocked(r)
-}
-
-// RemoveAsync removes all lines in the wireframe without blocking the caller on
-// the renderer. Calls are coalesced with pending DrawAsync calls, so the latest
-// requested state wins. The renderer must remain valid until the worker drains.
-func (w *Wireframe) RemoveAsync(r debug.Renderer) {
-	w.enqueue(wireframeOp{renderer: r, remove: true})
-}
-
-func (w *Wireframe) enqueue(op wireframeOp) {
-	w.asyncMu.Lock()
-	w.asyncOp = &op
-	if w.asyncRunning {
-		w.asyncMu.Unlock()
-		return
-	}
-	w.asyncRunning = true
-	w.asyncMu.Unlock()
-	go w.runAsync()
-}
-
-func (w *Wireframe) runAsync() {
-	for {
-		w.asyncMu.Lock()
-		op := w.asyncOp
-		w.asyncOp = nil
-		if op == nil {
-			w.asyncRunning = false
-			w.asyncMu.Unlock()
-			return
-		}
-		w.asyncMu.Unlock()
-		if op.remove {
-			w.Remove(op.renderer)
-			continue
-		}
-		w.Draw(op.renderer, op.segments, op.colour)
-	}
 }
 
 func (w *Wireframe) removeLocked(r debug.Renderer) {
