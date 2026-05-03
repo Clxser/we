@@ -49,6 +49,23 @@ func (s uniformBlockStructure) At(_, _, _ int, _ func(x, y, z int) world.Block) 
 	return s.block, s.liq
 }
 
+type blockFuncStructure struct {
+	min     cube.Pos
+	d       [3]int
+	blockAt func(cube.Pos) world.Block
+}
+
+func (s blockFuncStructure) Dimensions() [3]int { return s.d }
+
+func (s blockFuncStructure) At(x, y, z int, _ func(x, y, z int) world.Block) (world.Block, world.Liquid) {
+	block := s.blockAt(cube.Pos{s.min[0] + x, s.min[1] + y, s.min[2] + z})
+	if block == nil {
+		block = mcblock.Air{}
+	}
+	liq, _ := knownDenseLiquid(block, nil)
+	return block, liq
+}
+
 func writeUniformArea(tx *world.Tx, area geo.Area, block world.Block, batch *history.Batch) {
 	if block == nil {
 		block = mcblock.Air{}
@@ -89,20 +106,15 @@ func writeUniformArea(tx *world.Tx, area geo.Area, block world.Block, batch *his
 // to repeated Batch.SetBlock calls without re-reading the world after writing.
 func writeDenseArea(tx *world.Tx, area geo.Area, blockAt func(cube.Pos) world.Block, batch *history.Batch) {
 	n := int(area.Volume())
-	entries := make([]denseBlockEntry, 0, n)
 	if batch == nil {
-		area.Range(func(x, y, z int) {
-			pos := cube.Pos{x, y, z}
-			block := blockAt(pos)
-			if block == nil {
-				block = mcblock.Air{}
-			}
-			liq, _ := knownDenseLiquid(block, nil)
-			entries = append(entries, denseBlockEntry{Pos: pos, Index: -1, Block: block, Liq: liq})
+		buildStructure(tx, area.Min, blockFuncStructure{
+			min:     area.Min,
+			d:       [3]int{area.Dx(), area.Dy(), area.Dz()},
+			blockAt: blockAt,
 		})
-		buildStructure(tx, area.Min, denseBlockStructure{d: [3]int{area.Dx(), area.Dy(), area.Dz()}, entries: entries})
 		return
 	}
+	entries := make([]denseBlockEntry, 0, n)
 	batch.Grow(n)
 	appendHistory := batch.Empty()
 	area.Range(func(x, y, z int) {
