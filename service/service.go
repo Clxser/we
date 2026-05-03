@@ -42,6 +42,11 @@ type ChangeResult struct {
 	Changed int
 }
 
+// EditOptions controls optional behavior for block-writing commands.
+type EditOptions struct {
+	NoUndo bool
+}
+
 // PositionResult reports how many positions changed and the anchor block written.
 type PositionResult struct {
 	Changed int
@@ -109,6 +114,27 @@ func guardrailsFor(s Session) guardrail.Limits {
 
 func record(s Session, batch *history.Batch) ChangeResult {
 	return ChangeResult{Changed: s.Record(batch)}
+}
+
+func historyBatch(opts EditOptions) *history.Batch {
+	if opts.NoUndo {
+		return nil
+	}
+	return history.NewBatch(false)
+}
+
+func finishEdit(s Session, batch *history.Batch, approx int) ChangeResult {
+	if batch == nil {
+		return ChangeResult{Changed: approx}
+	}
+	return record(s, batch)
+}
+
+func ParseEditOptions(args []string) ([]string, EditOptions) {
+	opts := EditOptions{
+		NoUndo: HasFlag(args, "-noundo") || HasFlag(args, "--no-undo"),
+	}
+	return RemoveFlags(args, "-noundo", "--no-undo"), opts
 }
 
 // HasFlag reports whether args contains flag (case-insensitive).

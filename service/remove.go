@@ -9,7 +9,6 @@ import (
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/edit"
 	"github.com/df-mc/we/geo"
-	"github.com/df-mc/we/history"
 	"github.com/df-mc/we/parse"
 )
 
@@ -17,6 +16,11 @@ const defaultRemoveHeight = 64
 
 // RemoveAbove clears a vertical column or square prism above center.
 func RemoveAbove(tx *world.Tx, s Session, center cube.Pos, args []string) (ChangeResult, error) {
+	args, opts := ParseEditOptions(args)
+	return RemoveAboveWithOptions(tx, s, center, args, opts)
+}
+
+func RemoveAboveWithOptions(tx *world.Tx, s Session, center cube.Pos, args []string, opts EditOptions) (ChangeResult, error) {
 	height, radius, err := parseHeightRadius(args, "//removeabove")
 	if err != nil {
 		return ChangeResult{}, err
@@ -25,13 +29,18 @@ func RemoveAbove(tx *world.Tx, s Session, center cube.Pos, args []string) (Chang
 	if err := checkArea(guardrailsFor(s), area); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := history.NewBatch(false)
+	batch := historyBatch(opts)
 	edit.ClearArea(tx, area, batch)
-	return record(s, batch), nil
+	return finishEdit(s, batch, int(area.Volume())), nil
 }
 
 // RemoveBelow clears a vertical column or square prism below center.
 func RemoveBelow(tx *world.Tx, s Session, center cube.Pos, args []string) (ChangeResult, error) {
+	args, opts := ParseEditOptions(args)
+	return RemoveBelowWithOptions(tx, s, center, args, opts)
+}
+
+func RemoveBelowWithOptions(tx *world.Tx, s Session, center cube.Pos, args []string, opts EditOptions) (ChangeResult, error) {
 	height, radius, err := parseHeightRadius(args, "//removebelow")
 	if err != nil {
 		return ChangeResult{}, err
@@ -40,9 +49,9 @@ func RemoveBelow(tx *world.Tx, s Session, center cube.Pos, args []string) (Chang
 	if err := checkArea(guardrailsFor(s), area); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := history.NewBatch(false)
+	batch := historyBatch(opts)
 	edit.ClearArea(tx, area, batch)
-	return record(s, batch), nil
+	return finishEdit(s, batch, int(area.Volume())), nil
 }
 
 func parseHeightRadius(args []string, command string) (height, radius int, err error) {
@@ -67,6 +76,11 @@ func parseHeightRadius(args []string, command string) (height, radius int, err e
 
 // RemoveNear clears matching blocks in a sphere around center.
 func RemoveNear(tx *world.Tx, s Session, center cube.Pos, args []string) (ChangeResult, error) {
+	args, opts := ParseEditOptions(args)
+	return RemoveNearWithOptions(tx, s, center, args, opts)
+}
+
+func RemoveNearWithOptions(tx *world.Tx, s Session, center cube.Pos, args []string, opts EditOptions) (ChangeResult, error) {
 	if len(args) < 2 {
 		return ChangeResult{}, fmt.Errorf("usage: //removenear <blocks> <radius>")
 	}
@@ -82,18 +96,22 @@ func RemoveNear(tx *world.Tx, s Session, center cube.Pos, args []string) (Change
 	if err := checkArea(guardrailsFor(s), area); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := history.NewBatch(false)
+	batch := historyBatch(opts)
 	edit.RemoveNear(tx, center, radius, edit.BlockMask{Blocks: blocks}, batch)
-	return record(s, batch), nil
+	return finishEdit(s, batch, int(area.Volume())), nil
 }
 
 // Naturalize converts selected terrain columns into grass, dirt, then stone.
 func Naturalize(tx *world.Tx, s Session) (ChangeResult, error) {
+	return NaturalizeWithOptions(tx, s, EditOptions{})
+}
+
+func NaturalizeWithOptions(tx *world.Tx, s Session, opts EditOptions) (ChangeResult, error) {
 	area, err := selectedArea(s)
 	if err != nil {
 		return ChangeResult{}, err
 	}
-	batch := history.NewBatch(false)
+	batch := historyBatch(opts)
 	edit.Naturalize(tx, area, batch)
-	return record(s, batch), nil
+	return finishEdit(s, batch, int(area.Volume())), nil
 }

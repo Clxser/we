@@ -50,6 +50,34 @@ func BenchmarkFillArea(b *testing.B) {
 	}
 }
 
+func BenchmarkFillAreaNoHistory(b *testing.B) {
+	w := newBenchWorld(b)
+	area := geo.NewArea(0, 0, 0, 15, 7, 15)
+	blocks := []world.Block{mcblock.Stone{}}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		execBenchTx(b, w, func(tx *world.Tx) {
+			edit.FillArea(tx, area, blocks, nil)
+		})
+	}
+}
+
+func BenchmarkFillAreaNoHistoryMultiBlock(b *testing.B) {
+	w := newBenchWorld(b)
+	area := geo.NewArea(0, 0, 0, 15, 7, 15)
+	blocks := []world.Block{mcblock.Stone{}, mcblock.Dirt{}}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		execBenchTx(b, w, func(tx *world.Tx) {
+			edit.FillArea(tx, area, blocks, nil)
+		})
+	}
+}
+
 func BenchmarkCopySelection(b *testing.B) {
 	w := newBenchWorld(b)
 	area := geo.NewArea(0, 0, 0, 7, 3, 7)

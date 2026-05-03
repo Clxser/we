@@ -119,16 +119,22 @@ func Center(tx *world.Tx, area geo.Area, blocks []world.Block, batch *history.Ba
 		(area.Min[1] + area.Max[1]) / 2,
 		(area.Min[2] + area.Max[2]) / 2,
 	}
+	if batch == nil {
+		setBlock(tx, pos, ChooseBlock(blocks, nil))
+		return pos
+	}
 	batch.SetBlock(tx, pos, ChooseBlock(blocks, nil))
 	return pos
 }
 
 // Walls fills only the outer shell of area's cuboid.
 func Walls(tx *world.Tx, area geo.Area, blocks []world.Block, batch *history.Batch) {
-	batch.Grow(int(area.Volume()))
+	if batch != nil {
+		batch.Grow(int(area.Volume()))
+	}
 	area.Range(func(x, y, z int) {
 		if x == area.Min[0] || x == area.Max[0] || y == area.Min[1] || y == area.Max[1] || z == area.Min[2] || z == area.Max[2] {
-			batch.SetBlockFast(tx, cube.Pos{x, y, z}, ChooseBlock(blocks, nil))
+			setBlockOrBatch(tx, batch, cube.Pos{x, y, z}, ChooseBlock(blocks, nil))
 		}
 	})
 }
@@ -136,11 +142,13 @@ func Walls(tx *world.Tx, area geo.Area, blocks []world.Block, batch *history.Bat
 // ReplaceArea swaps blocks matching mask inside area for picks from to.
 func ReplaceArea(tx *world.Tx, area geo.Area, mask BlockMask, to []world.Block, batch *history.Batch) {
 	mask = mask.Prepared()
-	batch.Grow(int(area.Volume()))
+	if batch != nil {
+		batch.Grow(int(area.Volume()))
+	}
 	area.Range(func(x, y, z int) {
 		pos := cube.Pos{x, y, z}
 		if mask.Match(tx.Block(pos)) {
-			batch.SetBlockFast(tx, pos, ChooseBlock(to, nil))
+			setBlockOrBatch(tx, batch, pos, ChooseBlock(to, nil))
 		}
 	})
 }
@@ -150,7 +158,9 @@ func ReplaceNear(tx *world.Tx, center cube.Pos, radius int, mask BlockMask, to [
 	mask = mask.Prepared()
 	r2 := radius * radius
 	area := geo.NewArea(center[0]-radius, center[1]-radius, center[2]-radius, center[0]+radius, center[1]+radius, center[2]+radius)
-	batch.Grow(int(area.Volume()))
+	if batch != nil {
+		batch.Grow(int(area.Volume()))
+	}
 	area.Range(func(x, y, z int) {
 		dx, dy, dz := x-center[0], y-center[1], z-center[2]
 		if dx*dx+dy*dy+dz*dz > r2 {
@@ -158,7 +168,7 @@ func ReplaceNear(tx *world.Tx, center cube.Pos, radius int, mask BlockMask, to [
 		}
 		pos := cube.Pos{x, y, z}
 		if mask.Match(tx.Block(pos)) {
-			batch.SetBlockFast(tx, pos, ChooseBlock(to, nil))
+			setBlockOrBatch(tx, batch, pos, ChooseBlock(to, nil))
 		}
 	})
 }
@@ -166,7 +176,9 @@ func ReplaceNear(tx *world.Tx, center cube.Pos, radius int, mask BlockMask, to [
 // TopLayer replaces only the topmost matching block in each (x, z) column of area.
 func TopLayer(tx *world.Tx, area geo.Area, mask BlockMask, to []world.Block, batch *history.Batch) {
 	mask = mask.Prepared()
-	batch.Grow(area.Dx() * area.Dz())
+	if batch != nil {
+		batch.Grow(area.Dx() * area.Dz())
+	}
 	for x := area.Min[0]; x <= area.Max[0]; x++ {
 		for z := area.Min[2]; z <= area.Max[2]; z++ {
 			for y := highestSelectionY(tx, area, x, z); y >= area.Min[1]; y-- {
@@ -176,7 +188,7 @@ func TopLayer(tx *world.Tx, area geo.Area, mask BlockMask, to []world.Block, bat
 					continue
 				}
 				if mask.Match(b) {
-					batch.SetBlockFast(tx, pos, ChooseBlock(to, nil))
+					setBlockOrBatch(tx, batch, pos, ChooseBlock(to, nil))
 				}
 				break
 			}
@@ -186,7 +198,9 @@ func TopLayer(tx *world.Tx, area geo.Area, mask BlockMask, to []world.Block, bat
 
 // Overlay places blocks on top of the highest non-air block in each column.
 func Overlay(tx *world.Tx, area geo.Area, blocks []world.Block, batch *history.Batch) {
-	batch.Grow(area.Dx() * area.Dz())
+	if batch != nil {
+		batch.Grow(area.Dx() * area.Dz())
+	}
 	for x := area.Min[0]; x <= area.Max[0]; x++ {
 		for z := area.Min[2]; z <= area.Max[2]; z++ {
 			for y := highestSelectionY(tx, area, x, z); y >= area.Min[1]; y-- {
@@ -196,7 +210,7 @@ func Overlay(tx *world.Tx, area geo.Area, blocks []world.Block, batch *history.B
 				}
 				above := cube.Pos{x, y + 1, z}
 				if parse.IsAir(tx.Block(above)) {
-					batch.SetBlockFast(tx, above, ChooseBlock(blocks, nil))
+					setBlockOrBatch(tx, batch, above, ChooseBlock(blocks, nil))
 				}
 				break
 			}
@@ -209,7 +223,9 @@ func RemoveNear(tx *world.Tx, center cube.Pos, radius int, mask BlockMask, batch
 	mask = mask.Prepared()
 	r2 := radius * radius
 	area := geo.NewArea(center[0]-radius, center[1]-radius, center[2]-radius, center[0]+radius, center[1]+radius, center[2]+radius)
-	batch.Grow(int(area.Volume()))
+	if batch != nil {
+		batch.Grow(int(area.Volume()))
+	}
 	area.Range(func(x, y, z int) {
 		dx, dy, dz := x-center[0], y-center[1], z-center[2]
 		if dx*dx+dy*dy+dz*dz > r2 {
@@ -217,19 +233,21 @@ func RemoveNear(tx *world.Tx, center cube.Pos, radius int, mask BlockMask, batch
 		}
 		pos := cube.Pos{x, y, z}
 		if mask.Match(tx.Block(pos)) {
-			batch.SetBlockFast(tx, pos, mcblock.Air{})
-			batch.SetLiquid(tx, pos, nil)
+			setBlockOrBatch(tx, batch, pos, mcblock.Air{})
+			setLiquidOrBatch(tx, batch, pos, nil)
 			return
 		}
 		if liq, ok := tx.Liquid(pos); ok && mask.Match(liq) {
-			batch.SetLiquid(tx, pos, nil)
+			setLiquidOrBatch(tx, batch, pos, nil)
 		}
 	})
 }
 
 // Naturalize converts each non-air column in area to grass, dirt, then stone.
 func Naturalize(tx *world.Tx, area geo.Area, batch *history.Batch) {
-	batch.Grow(int(area.Volume()))
+	if batch != nil {
+		batch.Grow(int(area.Volume()))
+	}
 	for x := area.Min[0]; x <= area.Max[0]; x++ {
 		for z := area.Min[2]; z <= area.Max[2]; z++ {
 			depth := 0
@@ -240,11 +258,11 @@ func Naturalize(tx *world.Tx, area geo.Area, batch *history.Batch) {
 				}
 				switch {
 				case depth == 0:
-					batch.SetBlockFast(tx, pos, mcblock.Grass{})
+					setBlockOrBatch(tx, batch, pos, mcblock.Grass{})
 				case depth <= 3:
-					batch.SetBlockFast(tx, pos, mcblock.Dirt{})
+					setBlockOrBatch(tx, batch, pos, mcblock.Dirt{})
 				default:
-					batch.SetBlockFast(tx, pos, mcblock.Stone{})
+					setBlockOrBatch(tx, batch, pos, mcblock.Stone{})
 				}
 				depth++
 			}
@@ -256,7 +274,9 @@ func Naturalize(tx *world.Tx, area geo.Area, batch *history.Batch) {
 func Drain(tx *world.Tx, center cube.Pos, radius int, batch *history.Batch) {
 	r2 := radius * radius
 	area := geo.NewArea(center[0]-radius, center[1]-radius, center[2]-radius, center[0]+radius, center[1]+radius, center[2]+radius)
-	batch.Grow(int(area.Volume()))
+	if batch != nil {
+		batch.Grow(int(area.Volume()))
+	}
 	area.Range(func(x, y, z int) {
 		dx, dy, dz := x-center[0], y-center[1], z-center[2]
 		if dx*dx+dy*dy+dz*dz > r2 {
@@ -264,10 +284,10 @@ func Drain(tx *world.Tx, center cube.Pos, radius int, batch *history.Batch) {
 		}
 		pos := cube.Pos{x, y, z}
 		if parse.IsFluidBlock(tx.Block(pos)) {
-			batch.SetBlockFast(tx, pos, mcblock.Air{})
+			setBlockOrBatch(tx, batch, pos, mcblock.Air{})
 		}
 		if liq, ok := tx.Liquid(pos); ok && parse.IsFluidBlock(liq) {
-			batch.SetLiquid(tx, pos, nil)
+			setLiquidOrBatch(tx, batch, pos, nil)
 		}
 	})
 }
@@ -298,17 +318,19 @@ func pasteBuffer(tx *world.Tx, origin cube.Pos, entries []bufferEntry, noAir boo
 	if !noAir && writeDenseBuffer(tx, origin, entries, batch) {
 		return
 	}
-	batch.Grow(len(entries))
+	if batch != nil {
+		batch.Grow(len(entries))
+	}
 	for _, e := range entries {
 		if noAir && parse.IsAir(e.Block) && !e.HasLiq {
 			continue
 		}
 		pos := origin.Add(e.Offset)
-		batch.SetBlockFast(tx, pos, e.Block)
+		setBlockOrBatch(tx, batch, pos, e.Block)
 		if e.HasLiq {
-			batch.SetLiquid(tx, pos, e.Liquid)
+			setLiquidOrBatch(tx, batch, pos, e.Liquid)
 		} else {
-			batch.SetLiquid(tx, pos, nil)
+			setLiquidOrBatch(tx, batch, pos, nil)
 		}
 	}
 }
@@ -337,14 +359,16 @@ func DirectionVector(face cube.Face) cube.Pos {
 // If noAir is true, source positions whose block is air are not written at the destination.
 func Move(tx *world.Tx, area geo.Area, dir cube.Pos, dist int, mask BlockMask, noAir bool, batch *history.Batch) {
 	entries := copyArea(tx, area, area.Min, mask, mask.All)
-	batch.Grow(len(entries) * 2)
+	if batch != nil {
+		batch.Grow(len(entries) * 2)
+	}
 	if mask.All && mask.IncludeAir {
 		ClearArea(tx, area, batch)
 	} else {
 		for _, e := range entries {
 			src := area.Min.Add(e.Offset)
-			batch.SetBlockFast(tx, src, mcblock.Air{})
-			batch.SetLiquid(tx, src, nil)
+			setBlockOrBatch(tx, batch, src, mcblock.Air{})
+			setLiquidOrBatch(tx, batch, src, nil)
 		}
 	}
 	dest := area.Min.Add(cube.Pos{dir[0] * dist, dir[1] * dist, dir[2] * dist})
@@ -359,7 +383,9 @@ func Stack(tx *world.Tx, area geo.Area, dir cube.Pos, amount int, noAir bool, ba
 	if !noAir {
 		layout, dense = makeDenseBuffer(entries)
 	}
-	batch.Grow(len(entries) * amount)
+	if batch != nil {
+		batch.Grow(len(entries) * amount)
+	}
 	step := cube.Pos{dir[0] * area.Dx(), dir[1] * area.Dy(), dir[2] * area.Dz()}
 	if dir[0] != 0 {
 		step = cube.Pos{dir[0] * area.Dx(), 0, 0}
@@ -432,7 +458,9 @@ func Line(tx *world.Tx, start, end cube.Pos, thickness int, blocks []world.Block
 	}
 	minOffset := -(thickness / 2)
 	maxOffset := minOffset + thickness - 1
-	batch.Grow((steps + 1) * thickness * thickness * thickness)
+	if batch != nil {
+		batch.Grow((steps + 1) * thickness * thickness * thickness)
+	}
 	for i := 0; i <= steps; i++ {
 		t := float64(i) / float64(steps)
 		x := int(math.Round(float64(start[0]) + float64(dx)*t))
@@ -441,10 +469,41 @@ func Line(tx *world.Tx, start, end cube.Pos, thickness int, blocks []world.Block
 		for ox := minOffset; ox <= maxOffset; ox++ {
 			for oy := minOffset; oy <= maxOffset; oy++ {
 				for oz := minOffset; oz <= maxOffset; oz++ {
-					batch.SetBlockFast(tx, cube.Pos{x + ox, y + oy, z + oz}, ChooseBlock(blocks, nil))
+					setBlockOrBatch(tx, batch, cube.Pos{x + ox, y + oy, z + oz}, ChooseBlock(blocks, nil))
 				}
 			}
 		}
+	}
+}
+
+func setBlockOrBatch(tx *world.Tx, batch *history.Batch, pos cube.Pos, block world.Block) {
+	if batch == nil {
+		setBlock(tx, pos, block)
+		return
+	}
+	batch.SetBlockFast(tx, pos, block)
+}
+
+func setLiquidOrBatch(tx *world.Tx, batch *history.Batch, pos cube.Pos, liq world.Liquid) {
+	if batch == nil {
+		tx.SetLiquid(pos, liq)
+		return
+	}
+	batch.SetLiquid(tx, pos, liq)
+}
+
+func setBlock(tx *world.Tx, pos cube.Pos, block world.Block) {
+	if block == nil {
+		block = mcblock.Air{}
+	}
+	if liq, ok := block.(world.Liquid); ok {
+		tx.SetBlock(pos, nil, nil)
+		tx.SetLiquid(pos, liq)
+		return
+	}
+	tx.SetBlock(pos, block, nil)
+	if _, ok := tx.Liquid(pos); ok {
+		tx.SetLiquid(pos, nil)
 	}
 }
 

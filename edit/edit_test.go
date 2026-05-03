@@ -148,6 +148,31 @@ func TestFillAreaLiquidUndoRedoBatch(t *testing.T) {
 	}
 }
 
+func TestFillAreaNilBatchWritesWithoutHistory(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		area := geo.NewArea(0, 0, 0, 1, 0, 0)
+		edit.FillArea(tx, area, []world.Block{mcblock.Stone{}}, nil)
+		area.Range(func(x, y, z int) {
+			if !parse.SameBlock(tx.Block(cube.Pos{x, y, z}), mcblock.Stone{}) {
+				t.Fatalf("fill missed %v", cube.Pos{x, y, z})
+			}
+		})
+	})
+}
+
+func TestFillAreaNilBatchMultiBlockWrites(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		area := geo.NewArea(0, 0, 0, 7, 0, 0)
+		edit.FillArea(tx, area, []world.Block{mcblock.Stone{}, mcblock.Dirt{}}, nil)
+		area.Range(func(x, y, z int) {
+			b := tx.Block(cube.Pos{x, y, z})
+			if !parse.SameBlock(b, mcblock.Stone{}) && !parse.SameBlock(b, mcblock.Dirt{}) {
+				t.Fatalf("fill wrote unexpected block %T at %v", b, cube.Pos{x, y, z})
+			}
+		})
+	})
+}
+
 func TestClearAreaRemovesLiquidLayer(t *testing.T) {
 	var failure string
 	withTx(t, func(tx *world.Tx) {

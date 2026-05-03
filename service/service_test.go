@@ -30,6 +30,7 @@ type fakeSession struct {
 	clipboard  *edit.Clipboard
 	guardrails guardrail.Limits
 	history    *history.History
+	records    int
 }
 
 func newFakeSession(area geo.Area) *fakeSession {
@@ -44,8 +45,11 @@ func (s *fakeSession) SetClipboard(c *edit.Clipboard) { s.clipboard = c }
 func (s *fakeSession) Clipboard() (*edit.Clipboard, bool) {
 	return s.clipboard, s.clipboard != nil
 }
-func (s *fakeSession) Guardrails() guardrail.Limits       { return s.guardrails }
-func (s *fakeSession) Record(batch *history.Batch) int    { return s.history.Record(batch) }
+func (s *fakeSession) Guardrails() guardrail.Limits { return s.guardrails }
+func (s *fakeSession) Record(batch *history.Batch) int {
+	s.records++
+	return s.history.Record(batch)
+}
 func (s *fakeSession) Undo(tx *world.Tx, brush bool) bool { return s.history.Undo(tx, brush) }
 func (s *fakeSession) Redo(tx *world.Tx, brush bool) bool { return s.history.Redo(tx, brush) }
 
@@ -110,6 +114,132 @@ func TestSetSubChunkGuardrailRejectsLargeSelection(t *testing.T) {
 	})
 }
 
+func TestSetWithNoUndoWritesWithoutRecording(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		area := geo.NewArea(0, 0, 0, 1, 0, 0)
+		s := newFakeSession(area)
+		area.Range(func(x, y, z int) { tx.SetBlock(cube.Pos{x, y, z}, mcblock.Dirt{}, nil) })
+
+		result, err := service.SetWithOptions(tx, s, "stone", service.EditOptions{NoUndo: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Changed != 2 {
+			t.Fatalf("changed = %d, want selected volume 2", result.Changed)
+		}
+		if s.records != 0 {
+			t.Fatalf("Record called %d times, want 0", s.records)
+		}
+		area.Range(func(x, y, z int) {
+			if !parse.SameBlock(tx.Block(cube.Pos{x, y, z}), mcblock.Stone{}) {
+				t.Fatalf("block %v was not set", cube.Pos{x, y, z})
+			}
+		})
+		if err := service.Undo(tx, s, false); !errors.Is(err, service.ErrNothingToUndo) {
+			t.Fatalf("Undo error = %v, want ErrNothingToUndo", err)
+		}
+		area.Range(func(x, y, z int) {
+			if !parse.SameBlock(tx.Block(cube.Pos{x, y, z}), mcblock.Stone{}) {
+				t.Fatalf("undo reverted no-undo set at %v", cube.Pos{x, y, z})
+			}
+		})
+	})
+}
+
+func TestSetWithNoUndoPreservesOlderUndoHistory(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		area := geo.NewArea(0, 0, 0, 0, 0, 0)
+		s := newFakeSession(area)
+		pos := cube.Pos{0, 0, 0}
+		tx.SetBlock(pos, mcblock.Dirt{}, nil)
+
+		if _, err := service.Set(tx, s, "stone"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.SetWithOptions(tx, s, "gold_block", service.EditOptions{NoUndo: true}); err != nil {
+			t.Fatal(err)
+		}
+		if err := service.Undo(tx, s, false); err != nil {
+			t.Fatal(err)
+		}
+		if !parse.SameBlock(tx.Block(pos), mcblock.Dirt{}) {
+			t.Fatalf("undo did not restore older batch, got %T", tx.Block(pos))
+		}
+	})
+}
+
+func TestSetWithNoUndoLiquidWrite(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		pos := cube.Pos{0, 0, 0}
+		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 0, 0))
+		tx.SetBlock(pos, mcblock.Dirt{}, nil)
+
+		if _, err := service.SetWithOptions(tx, s, "water", service.EditOptions{NoUndo: true}); err != nil {
+			t.Fatal(err)
+		}
+		water := mcblock.Water{Depth: 8, Still: true}
+		liq, ok := tx.Liquid(pos)
+		if !parse.SameBlock(tx.Block(pos), water) || !parse.SameLiquid(liq, ok, water, true) {
+			t.Fatalf("liquid state = block %T liquid %T/%v, want water", tx.Block(pos), liq, ok)
+		}
+	})
+}
+
+func TestCutWithNoUndoWritesClipboardWithoutRecording(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		area := geo.NewArea(0, 0, 0, 1, 0, 0)
+		s := newFakeSession(area)
+		area.Range(func(x, y, z int) { tx.SetBlock(cube.Pos{x, y, z}, mcblock.Stone{}, nil) })
+
+		result, err := service.CutWithOptions(tx, s, cube.Pos{}, cube.North, service.EditOptions{NoUndo: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Changed != 2 {
+			t.Fatalf("changed = %d, want selected volume 2", result.Changed)
+		}
+		if s.records != 0 {
+			t.Fatalf("Record called %d times, want 0", s.records)
+		}
+		if cb, ok := s.Clipboard(); !ok || len(cb.Entries) != 2 {
+			t.Fatalf("clipboard entries = %d/%v, want 2/true", len(cb.Entries), ok)
+		}
+		area.Range(func(x, y, z int) {
+			if !parse.IsAir(tx.Block(cube.Pos{x, y, z})) {
+				t.Fatalf("cut did not clear %v", cube.Pos{x, y, z})
+			}
+		})
+		if err := service.Undo(tx, s, false); !errors.Is(err, service.ErrNothingToUndo) {
+			t.Fatalf("Undo error = %v, want ErrNothingToUndo", err)
+		}
+	})
+}
+
+func TestReplaceWithNoUndoWritesWithoutRecording(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		area := geo.NewArea(0, 0, 0, 1, 0, 0)
+		s := newFakeSession(area)
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Dirt{}, nil)
+		tx.SetBlock(cube.Pos{1, 0, 0}, mcblock.Stone{}, nil)
+
+		result, err := service.Replace(tx, s, []string{"dirt", "gold_block", "-noundo"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Changed != 2 {
+			t.Fatalf("changed = %d, want selected volume 2", result.Changed)
+		}
+		if s.records != 0 {
+			t.Fatalf("Record called %d times, want 0", s.records)
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{0, 0, 0}), mcblock.Gold{}) {
+			t.Fatalf("matching block was not replaced, got %T", tx.Block(cube.Pos{0, 0, 0}))
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{1, 0, 0}), mcblock.Stone{}) {
+			t.Fatalf("non-matching block changed, got %T", tx.Block(cube.Pos{1, 0, 0}))
+		}
+	})
+}
 func TestCopyPasteNoAirKeepsExistingBlocks(t *testing.T) {
 	withTx(t, func(tx *world.Tx) {
 		s := newFakeSession(geo.NewArea(0, 0, 0, 1, 0, 0))

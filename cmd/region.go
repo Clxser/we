@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"strconv"
 	"strings"
 
 	dcf "github.com/df-mc/dragonfly/server/cmd"
@@ -20,12 +21,19 @@ type SetCommand struct {
 
 func (c SetCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
-	result, err := service.Set(tx, session.Ensure(p), string(c.Blocks))
+	blockSpec, opts := parseSetArgs(string(c.Blocks))
+	result, err := service.SetWithOptions(tx, session.Ensure(p), blockSpec, opts)
 	if err != nil {
 		o.Error(err)
 		return
 	}
 	o.Printf("Set %d blocks.", result.Changed)
+}
+
+func parseSetArgs(raw string) (string, service.EditOptions) {
+	args := strings.Fields(raw)
+	args, opts := service.ParseEditOptions(args)
+	return strings.Join(args, " "), opts
 }
 
 // CenterCommand implements //center <blocks> — places one block at the selection's centre.
@@ -52,7 +60,8 @@ type WallsCommand struct {
 
 func (c WallsCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
-	result, err := service.Walls(tx, session.Ensure(p), string(c.Blocks))
+	blockSpec, opts := parseSetArgs(string(c.Blocks))
+	result, err := service.WallsWithOptions(tx, session.Ensure(p), blockSpec, opts)
 	if err != nil {
 		o.Error(err)
 		return
@@ -63,12 +72,22 @@ func (c WallsCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 // DrainCommand implements //drain <radius> — removes fluids in a sphere around the player.
 type DrainCommand struct {
 	playerCommand
-	Radius int `cmd:"radius"`
+	Args dcf.Varargs `cmd:"args"`
 }
 
 func (c DrainCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
-	result, err := service.Drain(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), c.Radius)
+	args, opts := service.ParseEditOptions(strings.Fields(string(c.Args)))
+	if len(args) != 1 {
+		o.Error("usage: //drain <radius> [-noundo]")
+		return
+	}
+	radius, err := strconv.Atoi(args[0])
+	if err != nil {
+		o.Error("radius must be positive")
+		return
+	}
+	result, err := service.DrainWithOptions(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), radius, opts)
 	if err != nil {
 		o.Error(err)
 		return
@@ -93,7 +112,12 @@ func (c BiomeCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 		o.Error("usage: //biome list | //biome set <biome>")
 		return
 	}
-	b, err := service.SetBiome(tx, session.Ensure(p), args[1])
+	setArgs, opts := service.ParseEditOptions(args[1:])
+	if len(setArgs) != 1 {
+		o.Error("usage: //biome set <biome> [-noundo]")
+		return
+	}
+	b, err := service.SetBiomeWithOptions(tx, session.Ensure(p), setArgs[0], opts)
 	if err != nil {
 		o.Error(err)
 		return
@@ -158,7 +182,8 @@ type OverlayCommand struct {
 
 func (c OverlayCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
-	result, err := service.Overlay(tx, session.Ensure(p), string(c.Blocks))
+	blockSpec, opts := parseSetArgs(string(c.Blocks))
+	result, err := service.OverlayWithOptions(tx, session.Ensure(p), blockSpec, opts)
 	if err != nil {
 		o.Error(err)
 		return
@@ -215,11 +240,19 @@ func (c RemoveNearCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 }
 
 // NaturalizeCommand implements //naturalize — turns selected terrain into grass, dirt, and stone layers.
-type NaturalizeCommand struct{ playerCommand }
+type NaturalizeCommand struct {
+	playerCommand
+	Args dcf.Varargs `cmd:"args"`
+}
 
-func (NaturalizeCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
+func (c NaturalizeCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
-	result, err := service.Naturalize(tx, session.Ensure(p))
+	args, opts := service.ParseEditOptions(strings.Fields(string(c.Args)))
+	if len(args) != 0 {
+		o.Error("usage: //naturalize [-noundo]")
+		return
+	}
+	result, err := service.NaturalizeWithOptions(tx, session.Ensure(p), opts)
 	if err != nil {
 		o.Error(err)
 		return

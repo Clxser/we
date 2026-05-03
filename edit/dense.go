@@ -54,6 +54,11 @@ func writeUniformArea(tx *world.Tx, area geo.Area, block world.Block, batch *his
 		block = mcblock.Air{}
 	}
 	liq, hasLiq := knownDenseLiquid(block, nil)
+	structure := uniformBlockStructure{d: [3]int{area.Dx(), area.Dy(), area.Dz()}, block: block, liq: liq}
+	if batch == nil {
+		buildStructure(tx, area.Min, structure)
+		return
+	}
 	n := int(area.Volume())
 	batch.Grow(n)
 	appendHistory := batch.Empty()
@@ -72,7 +77,7 @@ func writeUniformArea(tx *world.Tx, area geo.Area, block world.Block, batch *his
 		}
 		batch.SetAfterKnownForIndex(index, block, liq, hasLiq)
 	})
-	tx.BuildStructure(area.Min, uniformBlockStructure{d: [3]int{area.Dx(), area.Dy(), area.Dz()}, block: block})
+	buildStructure(tx, area.Min, structure)
 	for _, entry := range outOfBounds {
 		batch.SetAfterForIndex(tx, entry.Index, entry.Pos)
 	}
@@ -84,8 +89,21 @@ func writeUniformArea(tx *world.Tx, area geo.Area, block world.Block, batch *his
 // to repeated Batch.SetBlock calls without re-reading the world after writing.
 func writeDenseArea(tx *world.Tx, area geo.Area, blockAt func(cube.Pos) world.Block, batch *history.Batch) {
 	n := int(area.Volume())
-	batch.Grow(n)
 	entries := make([]denseBlockEntry, 0, n)
+	if batch == nil {
+		area.Range(func(x, y, z int) {
+			pos := cube.Pos{x, y, z}
+			block := blockAt(pos)
+			if block == nil {
+				block = mcblock.Air{}
+			}
+			liq, _ := knownDenseLiquid(block, nil)
+			entries = append(entries, denseBlockEntry{Pos: pos, Index: -1, Block: block, Liq: liq})
+		})
+		buildStructure(tx, area.Min, denseBlockStructure{d: [3]int{area.Dx(), area.Dy(), area.Dz()}, entries: entries})
+		return
+	}
+	batch.Grow(n)
 	appendHistory := batch.Empty()
 	area.Range(func(x, y, z int) {
 		pos := cube.Pos{x, y, z}
@@ -115,7 +133,7 @@ func writeDenseArea(tx *world.Tx, area geo.Area, blockAt func(cube.Pos) world.Bl
 			batch.SetAfterKnownForIndex(entry.Index, entry.Block, liq, hasLiq)
 		}
 	}
-	tx.BuildStructure(area.Min, denseBlockStructure{d: [3]int{area.Dx(), area.Dy(), area.Dz()}, entries: entries})
+	buildStructure(tx, area.Min, denseBlockStructure{d: [3]int{area.Dx(), area.Dy(), area.Dz()}, entries: entries})
 	for _, entry := range entries {
 		if entry.Pos.OutOfBounds(worldRange) {
 			batch.SetAfterForIndex(tx, entry.Index, entry.Pos)
@@ -141,6 +159,19 @@ func writeDenseBufferLayout(tx *world.Tx, origin cube.Pos, layout denseBuffer, b
 
 func writeDenseBufferLayoutScratch(tx *world.Tx, origin cube.Pos, layout denseBuffer, batch *history.Batch, denseEntries []denseBlockEntry) []denseBlockEntry {
 	n := len(layout.ordered)
+	if batch == nil {
+		if cap(denseEntries) < n {
+			denseEntries = make([]denseBlockEntry, n)
+		} else {
+			denseEntries = denseEntries[:n]
+		}
+		for i, entry := range layout.ordered {
+			block, liq := structureLayers(entry)
+			denseEntries[i] = denseBlockEntry{Pos: origin.Add(entry.Offset), Index: -1, Block: block, Liq: liq}
+		}
+		buildStructure(tx, origin.Add(layout.min), denseBlockStructure{d: layout.dims, entries: denseEntries})
+		return denseEntries
+	}
 	batch.Grow(n)
 	if cap(denseEntries) < n {
 		denseEntries = make([]denseBlockEntry, n)
@@ -179,6 +210,10 @@ func writeDenseBufferLayoutScratch(tx *world.Tx, origin cube.Pos, layout denseBu
 		}
 	}
 	return denseEntries
+}
+
+func buildStructure(tx *world.Tx, pos cube.Pos, structure world.Structure) {
+	tx.BuildStructure(pos, structure)
 }
 
 func makeDenseBuffer(entries []bufferEntry) (denseBuffer, bool) {

@@ -53,12 +53,20 @@ func (ClearClipboardCommand) Run(src dcf.Source, o *dcf.Output, _ *world.Tx) {
 	o.Print("Clipboard cleared.")
 }
 
-// CutCommand implements //cut — copies the selection to the clipboard, then clears it.
-type CutCommand struct{ playerCommand }
+// CutCommand implements //cut [-noundo] — copies the selection to the clipboard, then clears it.
+type CutCommand struct {
+	playerCommand
+	Args dcf.Varargs `cmd:"args"`
+}
 
-func (CutCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
+func (c CutCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
-	result, err := service.Cut(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), p.Rotation().Direction())
+	args, opts := service.ParseEditOptions(strings.Fields(string(c.Args)))
+	if len(args) != 0 {
+		o.Error("usage: //cut [-noundo]")
+		return
+	}
+	result, err := service.CutWithOptions(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), p.Rotation().Direction(), opts)
 	if err != nil {
 		o.Error(err)
 		return

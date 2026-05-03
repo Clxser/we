@@ -145,7 +145,9 @@ func ApplyShape(tx *world.Tx, anchor cube.Pos, spec ShapeSpec, blocks []world.Bl
 		writeDenseArea(tx, area, func(cube.Pos) world.Block { return ChooseBlock(blocks, nil) }, batch)
 		return
 	}
-	batch.Grow(int(area.Volume()))
+	if batch != nil {
+		batch.Grow(int(area.Volume()))
+	}
 	area.Range(func(x, y, z int) {
 		pos := cube.Pos{x, y, z}
 		if spec.Hollow {
@@ -155,7 +157,7 @@ func ApplyShape(tx *world.Tx, anchor cube.Pos, spec ShapeSpec, blocks []world.Bl
 		} else if !spec.Inside(anchor, pos) {
 			return
 		}
-		batch.SetBlockFast(tx, pos, ChooseBlock(blocks, nil))
+		setBlockOrBatch(tx, batch, pos, ChooseBlock(blocks, nil))
 	})
 }
 
