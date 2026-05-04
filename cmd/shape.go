@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -24,12 +25,13 @@ type LineCommand struct {
 
 func (c LineCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.Line(tx, session.Ensure(p), strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Drew line with %d changes.", result.Changed)
+	timer.Printf(o, "Drew line with %d changes.", result.Changed)
 }
 
 // ShapeCommand backs //sphere, //cylinder, //pyramid, //cone, and //cube.
@@ -42,12 +44,13 @@ type ShapeCommand struct {
 
 func (c ShapeCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.Shape(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), c.Kind, strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Created %s with %d changes.", c.Kind, result.Changed)
+	timer.Printf(o, "Created %s with %d changes.", c.Kind, result.Changed)
 }
 
 // BrushCommand implements //brush — opens the brush form with no args, or quick-binds with <type> [blocks] [radius].
@@ -71,7 +74,9 @@ func (c BrushCommand) Run(src dcf.Source, o *dcf.Output, _ *world.Tx) {
 	}
 	cfg := service.DefaultBrushConfig()
 	cfg.Type = strings.ToLower(args[0])
-	cfg.Shape = cfg.Type
+	if slices.Contains(service.BrushShapes(), cfg.Type) {
+		cfg.Shape = cfg.Type
+	}
 	if len(args) > 1 {
 		blocks, err := parse.ParseBlockList(args[1])
 		if err != nil {

@@ -215,6 +215,37 @@ func TestClipboardPasteNoAirKeepsExistingBlocks(t *testing.T) {
 	})
 }
 
+func TestPasteRotatesDirectionalBlockState(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Furnace{Facing: cube.North}, nil)
+		cb := edit.CopySelection(tx, geo.NewArea(0, 0, 0, 0, 0, 0), cube.Pos{0, 0, 0}, cube.North, edit.BlockMask{All: true, IncludeAir: true}, false)
+		if err := edit.PasteClipboard(tx, cb, cube.Pos{10, 0, 0}, cube.East, false, history.NewBatch(false)); err != nil {
+			t.Fatalf("PasteClipboard: %v", err)
+		}
+		furnace, ok := tx.Block(cube.Pos{10, 0, 0}).(mcblock.Furnace)
+		if !ok || furnace.Facing != cube.East {
+			t.Fatalf("pasted block = %#v, want east-facing furnace", tx.Block(cube.Pos{10, 0, 0}))
+		}
+	})
+}
+
+func TestRotateClipboardTransformsDirectionalBlockState(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Stairs{Facing: cube.North, Block: mcblock.Cobblestone{}}, nil)
+		cb := edit.CopySelection(tx, geo.NewArea(0, 0, 0, 0, 0, 0), cube.Pos{0, 0, 0}, cube.North, edit.BlockMask{All: true, IncludeAir: true}, false)
+		if err := edit.RotateClipboard(cb, 90, "y"); err != nil {
+			t.Fatalf("RotateClipboard: %v", err)
+		}
+		if err := edit.PasteClipboard(tx, cb, cube.Pos{10, 0, 0}, cube.North, false, history.NewBatch(false)); err != nil {
+			t.Fatalf("PasteClipboard: %v", err)
+		}
+		stairs, ok := tx.Block(cube.Pos{10, 0, 0}).(mcblock.Stairs)
+		if !ok || stairs.Facing != cube.East {
+			t.Fatalf("pasted block = %#v, want east-facing stairs", tx.Block(cube.Pos{10, 0, 0}))
+		}
+	})
+}
+
 func TestClipboardDensePastePreservesOffsetsLiquidsAndUndo(t *testing.T) {
 	var failure string
 	withTx(t, func(tx *world.Tx) {
@@ -331,6 +362,29 @@ func TestSchematicRoundTrip(t *testing.T) {
 		}
 		if !parse.SameBlock(tx.Block(cube.Pos{5, 0, 0}), mcblock.Stone{}) {
 			t.Fatal("loaded schematic did not paste expected block")
+		}
+	})
+}
+
+func TestSchematicRoundTripPreservesBlockState(t *testing.T) {
+	store := edit.NewFileSchematicStore(filepath.Join(t.TempDir(), "schematics"))
+
+	withTx(t, func(tx *world.Tx) {
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Furnace{Facing: cube.West}, nil)
+		cb := edit.CopySelection(tx, geo.NewArea(0, 0, 0, 0, 0, 0), cube.Pos{0, 0, 0}, cube.North, edit.BlockMask{All: true, IncludeAir: true}, false)
+		if err := store.Save("furnace", cb); err != nil {
+			t.Fatalf("SaveSchematic: %v", err)
+		}
+		loaded, err := store.Load("furnace")
+		if err != nil {
+			t.Fatalf("LoadSchematic: %v", err)
+		}
+		if err := edit.PasteClipboard(tx, loaded, cube.Pos{5, 0, 0}, cube.North, false, history.NewBatch(false)); err != nil {
+			t.Fatalf("PasteClipboard: %v", err)
+		}
+		furnace, ok := tx.Block(cube.Pos{5, 0, 0}).(mcblock.Furnace)
+		if !ok || furnace.Facing != cube.West {
+			t.Fatalf("loaded schematic block = %#v, want west-facing furnace", tx.Block(cube.Pos{5, 0, 0}))
 		}
 	})
 }

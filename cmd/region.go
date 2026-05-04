@@ -22,12 +22,13 @@ type SetCommand struct {
 func (c SetCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
 	blockSpec, opts := parseSetArgs(string(c.Blocks))
+	timer := startOperation()
 	result, err := service.SetWithOptions(tx, session.Ensure(p), blockSpec, opts)
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Set %d blocks.", result.Changed)
+	timer.Printf(o, "Set %d blocks.", result.Changed)
 }
 
 func parseSetArgs(raw string) (string, service.EditOptions) {
@@ -44,12 +45,13 @@ type CenterCommand struct {
 
 func (c CenterCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.Center(tx, session.Ensure(p), string(c.Blocks))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Marked center at %v.", result.Pos)
+	timer.Printf(o, "Marked center at %v.", result.Pos)
 }
 
 // WallsCommand implements //walls <blocks> — fills only the outer shell of the selection.
@@ -61,12 +63,13 @@ type WallsCommand struct {
 func (c WallsCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
 	blockSpec, opts := parseSetArgs(string(c.Blocks))
+	timer := startOperation()
 	result, err := service.WallsWithOptions(tx, session.Ensure(p), blockSpec, opts)
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Built walls with %d changes.", result.Changed)
+	timer.Printf(o, "Built walls with %d changes.", result.Changed)
 }
 
 // DrainCommand implements //drain <radius> — removes fluids in a sphere around the player.
@@ -87,12 +90,13 @@ func (c DrainCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 		o.Error("radius must be positive")
 		return
 	}
+	timer := startOperation()
 	result, err := service.DrainWithOptions(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), radius, opts)
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Drained %d blocks.", result.Changed)
+	timer.Printf(o, "Drained %d blocks.", result.Changed)
 }
 
 // BiomeCommand implements //biome list and //biome set <name> — biome inspection and assignment.
@@ -117,12 +121,13 @@ func (c BiomeCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 		o.Error("usage: //biome set <biome> [-noundo]")
 		return
 	}
+	timer := startOperation()
 	b, err := service.SetBiomeWithOptions(tx, session.Ensure(p), setArgs[0], opts)
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Set biome %s.", b.String())
+	timer.Printf(o, "Set biome %s.", b.String())
 }
 
 // ReplaceCommand implements //replace <mask> <to> — swaps matching blocks in the selection.
@@ -133,12 +138,13 @@ type ReplaceCommand struct {
 
 func (c ReplaceCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.Replace(tx, session.Ensure(p), strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Replaced %d blocks.", result.Changed)
+	timer.Printf(o, "Replaced %d blocks.", result.Changed)
 }
 
 // ReplaceNearCommand implements //replacenear <distance> <mask> <to> — replace inside a sphere around the player.
@@ -150,12 +156,13 @@ type ReplaceNearCommand struct {
 
 func (c ReplaceNearCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.ReplaceNear(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), c.Distance, strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Replaced %d nearby blocks.", result.Changed)
+	timer.Printf(o, "Replaced %d nearby blocks.", result.Changed)
 }
 
 // TopLayerCommand implements //toplayer <mask> <to> — replaces only the topmost matching block per column.
@@ -166,12 +173,13 @@ type TopLayerCommand struct {
 
 func (c TopLayerCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.TopLayer(tx, session.Ensure(p), strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Replaced %d top-layer blocks.", result.Changed)
+	timer.Printf(o, "Replaced %d top-layer blocks.", result.Changed)
 }
 
 // OverlayCommand implements //overlay <blocks> — places blocks above the highest solid blocks per column.
@@ -183,12 +191,13 @@ type OverlayCommand struct {
 func (c OverlayCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
 	blockSpec, opts := parseSetArgs(string(c.Blocks))
+	timer := startOperation()
 	result, err := service.OverlayWithOptions(tx, session.Ensure(p), blockSpec, opts)
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Overlay changed %d blocks.", result.Changed)
+	timer.Printf(o, "Overlay changed %d blocks.", result.Changed)
 }
 
 // RemoveAboveCommand implements //removeabove [height] [radius] — clears blocks above the player.
@@ -199,12 +208,13 @@ type RemoveAboveCommand struct {
 
 func (c RemoveAboveCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.RemoveAbove(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Removed %d blocks above.", result.Changed)
+	timer.Printf(o, "Removed %d blocks above.", result.Changed)
 }
 
 // RemoveBelowCommand implements //removebelow [height] [radius] — clears blocks below the player.
@@ -215,12 +225,13 @@ type RemoveBelowCommand struct {
 
 func (c RemoveBelowCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.RemoveBelow(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Removed %d blocks below.", result.Changed)
+	timer.Printf(o, "Removed %d blocks below.", result.Changed)
 }
 
 // RemoveNearCommand implements //removenear <blocks> <radius> — clears matching nearby blocks.
@@ -231,12 +242,13 @@ type RemoveNearCommand struct {
 
 func (c RemoveNearCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.RemoveNear(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Removed %d nearby blocks.", result.Changed)
+	timer.Printf(o, "Removed %d nearby blocks.", result.Changed)
 }
 
 // NaturalizeCommand implements //naturalize — turns selected terrain into grass, dirt, and stone layers.
@@ -252,10 +264,11 @@ func (c NaturalizeCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 		o.Error("usage: //naturalize [-noundo]")
 		return
 	}
+	timer := startOperation()
 	result, err := service.NaturalizeWithOptions(tx, session.Ensure(p), opts)
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Naturalized %d blocks.", result.Changed)
+	timer.Printf(o, "Naturalized %d blocks.", result.Changed)
 }

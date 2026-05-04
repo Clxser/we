@@ -32,6 +32,7 @@ type BrushDefinition struct {
 	Type        string
 	ShapeBrush  bool
 	ShapeVolume bool
+	AnchorOnHit bool
 }
 
 var brushDefinitions = []BrushDefinition{
@@ -43,13 +44,13 @@ var brushDefinitions = []BrushDefinition{
 	{Type: BrushFill, ShapeVolume: true},
 	{Type: BrushTopLayer, ShapeVolume: true},
 	{Type: BrushOverlay, ShapeVolume: true},
-	{Type: BrushWrap, ShapeVolume: true},
-	{Type: BrushPaint, ShapeVolume: true},
-	{Type: BrushPull, ShapeVolume: true},
-	{Type: BrushPush, ShapeVolume: true},
-	{Type: BrushTerraform, ShapeVolume: true},
+	{Type: BrushWrap, ShapeVolume: true, AnchorOnHit: true},
+	{Type: BrushPaint, ShapeVolume: true, AnchorOnHit: true},
+	{Type: BrushPull, ShapeVolume: true, AnchorOnHit: true},
+	{Type: BrushPush, ShapeVolume: true, AnchorOnHit: true},
+	{Type: BrushTerraform, ShapeVolume: true, AnchorOnHit: true},
 	{Type: BrushSchematic},
-	{Type: BrushReplace, ShapeVolume: true},
+	{Type: BrushReplace, ShapeVolume: true, AnchorOnHit: true},
 	{Type: BrushLine},
 }
 
@@ -86,6 +87,15 @@ func isShapeBrush(brushType string) bool {
 	for _, def := range brushDefinitions {
 		if def.Type == brushType {
 			return def.ShapeBrush
+		}
+	}
+	return false
+}
+
+func brushAnchorsOnHitBlock(brushType string) bool {
+	for _, def := range brushDefinitions {
+		if def.Type == brushType {
+			return def.AnchorOnHit
 		}
 	}
 	return false

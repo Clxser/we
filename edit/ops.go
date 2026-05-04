@@ -411,6 +411,8 @@ func RotateCopy(tx *world.Tx, area geo.Area, degrees int, axis string, batch *hi
 	axis = strings.ToLower(axis)
 	turns := ((degrees/90)%4 + 4) % 4
 	center := cube.Pos{(area.Dx() - 1) / 2, (area.Dy() - 1) / 2, (area.Dz() - 1) / 2}
+	transform := blockTransform{axis: axis, turns: turns}
+	cache := make(blockTransformCache)
 	for i := range entries {
 		o := entries[i].Offset.Sub(center)
 		for t := 0; t < turns; t++ {
@@ -424,6 +426,12 @@ func RotateCopy(tx *world.Tx, area geo.Area, degrees int, axis string, batch *hi
 			}
 		}
 		entries[i].Offset = o.Add(center)
+		entries[i].Block = cache.transform(entries[i].Block, transform)
+		if entries[i].HasLiq {
+			if l, ok := cache.transform(entries[i].Liquid, transform).(world.Liquid); ok {
+				entries[i].Liquid = l
+			}
+		}
 	}
 	pasteBuffer(tx, area.Min, entries, false, batch)
 }
@@ -431,9 +439,12 @@ func RotateCopy(tx *world.Tx, area geo.Area, degrees int, axis string, batch *hi
 // FlipCopy mirrors blocks inside area across axis (x, y, or z).
 func FlipCopy(tx *world.Tx, area geo.Area, axis string, batch *history.Batch) {
 	entries := copyArea(tx, area, area.Min, BlockMask{All: true, IncludeAir: true}, true)
+	axis = strings.ToLower(axis)
+	transform := blockTransform{axis: axis, flip: true}
+	cache := make(blockTransformCache)
 	for i := range entries {
 		o := entries[i].Offset
-		switch strings.ToLower(axis) {
+		switch axis {
 		case "y":
 			o[1] = area.Dy() - 1 - o[1]
 		case "z":
@@ -442,6 +453,12 @@ func FlipCopy(tx *world.Tx, area geo.Area, axis string, batch *history.Batch) {
 			o[0] = area.Dx() - 1 - o[0]
 		}
 		entries[i].Offset = o
+		entries[i].Block = cache.transform(entries[i].Block, transform)
+		if entries[i].HasLiq {
+			if l, ok := cache.transform(entries[i].Liquid, transform).(world.Liquid); ok {
+				entries[i].Liquid = l
+			}
+		}
 	}
 	pasteBuffer(tx, area.Min, entries, false, batch)
 }

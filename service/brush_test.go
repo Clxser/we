@@ -90,6 +90,37 @@ func TestBrushAnchorFromSurfaceLeavesLineAtSurface(t *testing.T) {
 	}
 }
 
+func TestBrushAnchorFromSurfacePaintTargetsHitBlock(t *testing.T) {
+	surface := cube.Pos{10, 63, 10}
+	want := cube.Pos{10, 64, 10}
+	got := service.BrushAnchorFromSurface(surface, cube.FaceDown, service.BrushConfig{Type: service.BrushPaint, Radius: 1, Height: 3})
+	if got != want {
+		t.Fatalf("BrushAnchorFromSurface() = %v, want hit block %v", got, want)
+	}
+}
+
+func TestPaintBrushCanDrawOnUnderside(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		target := cube.Pos{0, 0, 0}
+		tx.SetBlock(target, mcblock.Stone{}, nil)
+		batch := history.NewBatch(true)
+		err := service.ApplyBrush(tx, service.BrushActor{}, target, service.BrushConfig{
+			Type:     service.BrushPaint,
+			Shape:    service.BrushSphere,
+			Radius:   1,
+			Height:   3,
+			Strength: 1,
+			Blocks:   service.StatesFromBlocks([]world.Block{mcblock.Gold{}}),
+		}, edit.DefaultSchematicStore(), guardrail.Limits{}, batch)
+		if err != nil {
+			t.Fatalf("ApplyBrush: %v", err)
+		}
+		if !parse.SameBlock(tx.Block(target), mcblock.Gold{}) {
+			t.Fatalf("paint brush left underside target as %#v, want gold", tx.Block(target))
+		}
+	})
+}
+
 func TestBrushVolumeBounds(t *testing.T) {
 	area, ok := service.BrushVolumeBounds(cube.Pos{10, 20, 30}, service.BrushConfig{
 		Type:   service.BrushCube,

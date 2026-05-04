@@ -21,12 +21,13 @@ type MoveCommand struct {
 
 func (c MoveCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.Move(tx, session.Ensure(p), edit.DirectionVector(p.Rotation().Direction().Face()), strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Moved %d blocks.", result.Changed)
+	timer.Printf(o, "Moved %d blocks.", result.Changed)
 }
 
 // StackCommand implements //stack <amount> [-a] — repeats the selection along the player's facing.
@@ -37,12 +38,62 @@ type StackCommand struct {
 
 func (c StackCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
-	result, err := service.Stack(tx, session.Ensure(p), edit.DirectionVector(p.Rotation().Direction().Face()), strings.Fields(string(c.Args)))
+	dir, args, ok := stackDirection(edit.DirectionVector(p.Rotation().Direction().Face()), strings.Fields(string(c.Args)))
+	if !ok {
+		o.Error("usage: //stack <amount> [up|down|north|south|east|west] [-a]")
+		return
+	}
+	timer := startOperation()
+	result, err := service.Stack(tx, session.Ensure(p), dir, args)
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Stacked with %d changes.", result.Changed)
+	timer.Printf(o, "Stacked with %d changes.", result.Changed)
+}
+
+func stackDirection(defaultDir cube.Pos, args []string) (cube.Pos, []string, bool) {
+	if len(args) <= 1 {
+		return defaultDir, args, true
+	}
+	dir := defaultDir
+	out := []string{args[0]}
+	directionSet := false
+	for _, arg := range args[1:] {
+		if strings.HasPrefix(arg, "-") {
+			out = append(out, arg)
+			continue
+		}
+		if directionSet {
+			return cube.Pos{}, nil, false
+		}
+		parsed, ok := namedDirection(arg)
+		if !ok {
+			return cube.Pos{}, nil, false
+		}
+		dir = parsed
+		directionSet = true
+	}
+	return dir, out, true
+}
+
+func namedDirection(s string) (cube.Pos, bool) {
+	switch strings.ToLower(s) {
+	case "up", "u":
+		return edit.DirectionVector(cube.FaceUp), true
+	case "down", "d":
+		return edit.DirectionVector(cube.FaceDown), true
+	case "north", "n":
+		return edit.DirectionVector(cube.FaceNorth), true
+	case "south", "s":
+		return edit.DirectionVector(cube.FaceSouth), true
+	case "east", "e":
+		return edit.DirectionVector(cube.FaceEast), true
+	case "west", "w":
+		return edit.DirectionVector(cube.FaceWest), true
+	default:
+		return cube.Pos{}, false
+	}
 }
 
 // RotateCommand implements //rotate <90|180|270|360> [axis] — rotates the clipboard.
@@ -53,12 +104,13 @@ type RotateCommand struct {
 
 func (c RotateCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.Rotate(tx, session.Ensure(p), strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Rotated clipboard with %d entries.", result.Changed)
+	timer.Printf(o, "Rotated clipboard with %d entries.", result.Changed)
 }
 
 // FlipCommand implements //flip [axis] — mirrors the clipboard across an axis (defaults from facing).
@@ -80,10 +132,11 @@ func (c FlipCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 			axis = "x"
 		}
 	}
+	timer := startOperation()
 	result, err := service.Flip(tx, session.Ensure(p), axis)
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Flipped clipboard with %d entries.", result.Changed)
+	timer.Printf(o, "Flipped clipboard with %d entries.", result.Changed)
 }

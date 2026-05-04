@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/df-mc/dragonfly/server/block/cube"
+	"github.com/df-mc/dragonfly/server/world"
 )
 
 // RotateClipboard rotates clipboard offsets around the clipboard origin.
@@ -17,8 +18,16 @@ func RotateClipboard(cb *Clipboard, degrees int, axis string) error {
 		return nil
 	}
 	axis = strings.ToLower(axis)
+	transform := blockTransform{axis: axis, turns: turns}
+	cache := make(blockTransformCache)
 	for i := range cb.Entries {
 		cb.Entries[i].Offset = rotateOffset(cb.Entries[i].Offset, axis, turns)
+		cb.Entries[i].Block = cache.transform(cb.Entries[i].Block, transform)
+		if cb.Entries[i].HasLiq {
+			if l, ok := cache.transform(cb.Entries[i].Liquid, transform).(world.Liquid); ok {
+				cb.Entries[i].Liquid = l
+			}
+		}
 	}
 	return nil
 }
@@ -28,9 +37,12 @@ func FlipClipboard(cb *Clipboard, axis string) error {
 	if cb == nil || len(cb.Entries) == 0 {
 		return fmt.Errorf("clipboard is empty")
 	}
+	axis = strings.ToLower(axis)
+	transform := blockTransform{axis: axis, flip: true}
+	cache := make(blockTransformCache)
 	for i := range cb.Entries {
 		o := cb.Entries[i].Offset
-		switch strings.ToLower(axis) {
+		switch axis {
 		case "y":
 			o[1] = -o[1]
 		case "z":
@@ -39,6 +51,12 @@ func FlipClipboard(cb *Clipboard, axis string) error {
 			o[0] = -o[0]
 		}
 		cb.Entries[i].Offset = o
+		cb.Entries[i].Block = cache.transform(cb.Entries[i].Block, transform)
+		if cb.Entries[i].HasLiq {
+			if l, ok := cache.transform(cb.Entries[i].Liquid, transform).(world.Liquid); ok {
+				cb.Entries[i].Liquid = l
+			}
+		}
 	}
 	return nil
 }

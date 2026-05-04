@@ -20,12 +20,13 @@ type CopyCommand struct {
 
 func (c CopyCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.Copy(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), p.Rotation().Direction(), strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Copied %d blocks.", result.Copied)
+	timer.Printf(o, "Copied %d blocks.", result.Copied)
 }
 
 // PasteCommand implements //paste [-a] — pastes the clipboard at the player's position.
@@ -36,12 +37,13 @@ type PasteCommand struct {
 
 func (c PasteCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	result, err := service.Paste(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), p.Rotation().Direction(), strings.Fields(string(c.Args)))
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Pasted %d blocks.", result.Changed)
+	timer.Printf(o, "Pasted %d blocks.", result.Changed)
 }
 
 // ClearClipboardCommand implements //clearclipboard — clears the player's clipboard.
@@ -66,12 +68,13 @@ func (c CutCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 		o.Error("usage: //cut [-noundo]")
 		return
 	}
+	timer := startOperation()
 	result, err := service.CutWithOptions(tx, session.Ensure(p), cube.PosFromVec3(p.Position()), p.Rotation().Direction(), opts)
 	if err != nil {
 		o.Error(err)
 		return
 	}
-	o.Printf("Cut %d blocks.", result.Changed)
+	timer.Printf(o, "Cut %d blocks.", result.Changed)
 }
 
 // SchematicCommand implements //schematic <create|paste|delete|list> — disk-backed selection storage.
@@ -84,6 +87,7 @@ func (c SchematicCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
 	args := strings.Fields(string(c.Args))
 	s := session.Ensure(p)
+	timer := startOperation()
 	result, err := service.Schematic(tx, s, cube.PosFromVec3(p.Position()), p.Rotation().Direction(), s.SchematicStore(), args)
 	if err != nil {
 		o.Error(err)
@@ -91,11 +95,11 @@ func (c SchematicCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	}
 	switch strings.ToLower(args[0]) {
 	case "create":
-		o.Printf("Saved schematic %q.", result.Name)
+		timer.Printf(o, "Saved schematic %q.", result.Name)
 	case "paste":
-		o.Printf("Pasted schematic %q.", result.Name)
+		timer.Printf(o, "Pasted schematic %q.", result.Name)
 	case "delete":
-		o.Printf("Deleted schematic %q.", result.Name)
+		timer.Printf(o, "Deleted schematic %q.", result.Name)
 	case "list":
 		o.Print("Schematics: " + strings.Join(result.Names, ", "))
 	}
@@ -109,11 +113,12 @@ type UndoCommand struct {
 
 func (c UndoCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	if err := service.Undo(tx, session.Ensure(p), optionalB(c.Target)); err != nil {
 		o.Error(err)
 		return
 	}
-	o.Print("Undo successful.")
+	timer.Print(o, "Undo successful.")
 }
 
 // RedoCommand implements //redo [b] — restores the last undone edit; "b" targets only the brush stack.
@@ -124,9 +129,10 @@ type RedoCommand struct {
 
 func (c RedoCommand) Run(src dcf.Source, o *dcf.Output, tx *world.Tx) {
 	p := src.(*player.Player)
+	timer := startOperation()
 	if err := service.Redo(tx, session.Ensure(p), optionalB(c.Target)); err != nil {
 		o.Error(err)
 		return
 	}
-	o.Print("Redo successful.")
+	timer.Print(o, "Redo successful.")
 }

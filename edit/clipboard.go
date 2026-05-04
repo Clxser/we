@@ -36,8 +36,16 @@ func PasteClipboard(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.Direc
 	if turns != 0 {
 		entries = make([]bufferEntry, len(cb.Entries))
 		copy(entries, cb.Entries)
+		transform := blockTransform{axis: "y", turns: turns}
+		cache := make(blockTransformCache)
 		for i := range entries {
 			entries[i].Offset = rotateOffset(entries[i].Offset, "y", turns)
+			entries[i].Block = cache.transform(entries[i].Block, transform)
+			if entries[i].HasLiq {
+				if b, ok := cache.transform(entries[i].Liquid, transform).(world.Liquid); ok {
+					entries[i].Liquid = b
+				}
+			}
 		}
 	}
 	pasteBuffer(tx, origin, entries, noAir, batch)

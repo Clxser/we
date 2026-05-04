@@ -303,7 +303,7 @@ func TestPasteSubChunkGuardrailHonoursNoAir(t *testing.T) {
 	})
 }
 
-func TestCopyPasteAnchorsSelectionAtCenter(t *testing.T) {
+func TestCopyPasteUsesCopyPositionAsPasteAnchor(t *testing.T) {
 	withTx(t, func(tx *world.Tx) {
 		s := newFakeSession(geo.NewArea(-1, 0, 0, 1, 0, 0))
 		tx.SetBlock(cube.Pos{-1, 0, 0}, mcblock.Stone{}, nil)
@@ -317,19 +317,19 @@ func TestCopyPasteAnchorsSelectionAtCenter(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if !parse.SameBlock(tx.Block(cube.Pos{9, 0, 0}), mcblock.Stone{}) {
-			t.Fatal("left side did not paste one block before target")
+		if !parse.SameBlock(tx.Block(cube.Pos{10, 0, 0}), mcblock.Stone{}) {
+			t.Fatal("copy-position block did not paste at target")
 		}
-		if !parse.SameBlock(tx.Block(cube.Pos{10, 0, 0}), mcblock.Gold{}) {
-			t.Fatal("selection center did not paste at target")
+		if !parse.SameBlock(tx.Block(cube.Pos{11, 0, 0}), mcblock.Gold{}) {
+			t.Fatal("middle block did not paste at its copied offset")
 		}
-		if !parse.SameBlock(tx.Block(cube.Pos{11, 0, 0}), mcblock.Dirt{}) {
-			t.Fatal("right side did not paste one block after target")
+		if !parse.SameBlock(tx.Block(cube.Pos{12, 0, 0}), mcblock.Dirt{}) {
+			t.Fatal("right side did not paste two blocks after target")
 		}
 	})
 }
 
-func TestCopyPasteEvenSelectionAnchorIsStableForNegativeCoordinates(t *testing.T) {
+func TestCopyPastePreservesRelativeOffsetFromCopyPosition(t *testing.T) {
 	withTx(t, func(tx *world.Tx) {
 		s := newFakeSession(geo.NewArea(-2, 0, 0, -1, 0, 0))
 		tx.SetBlock(cube.Pos{-2, 0, 0}, mcblock.Stone{}, nil)
@@ -349,7 +349,7 @@ func TestCopyPasteEvenSelectionAnchorIsStableForNegativeCoordinates(t *testing.T
 			t.Fatal("upper block did not paste after target")
 		}
 		if !parse.IsAir(tx.Block(cube.Pos{9, 0, 0})) {
-			t.Fatal("negative even-width selection pasted one block before target")
+			t.Fatal("clipboard pasted before the copied offset")
 		}
 	})
 }
@@ -590,6 +590,27 @@ func TestStackCopiesSelectionByAreaSize(t *testing.T) {
 		}
 		if !parse.SameBlock(tx.Block(cube.Pos{3, 0, 0}), mcblock.Dirt{}) {
 			t.Fatal("second stacked block mismatch")
+		}
+	})
+}
+
+func TestStackCopiesSelectionUp(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 0, 0))
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Stone{}, nil)
+
+		result, err := service.Stack(tx, s, cube.Pos{0, 1, 0}, []string{"2"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Changed != 2 {
+			t.Fatalf("changed = %d, want 2", result.Changed)
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{0, 1, 0}), mcblock.Stone{}) {
+			t.Fatal("first upward stack copy missing")
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{0, 2, 0}), mcblock.Stone{}) {
+			t.Fatal("second upward stack copy missing")
 		}
 	})
 }

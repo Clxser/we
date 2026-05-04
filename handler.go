@@ -2,7 +2,6 @@ package we
 
 import (
 	"image/color"
-	"math"
 
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/block/cube/trace"
@@ -12,6 +11,7 @@ import (
 	_ "github.com/df-mc/we/cmd"
 	"github.com/df-mc/we/editbrush"
 	"github.com/df-mc/we/keys"
+	"github.com/df-mc/we/selectionui"
 	"github.com/df-mc/we/service"
 	"github.com/df-mc/we/session"
 	"github.com/df-mc/we/visual"
@@ -21,9 +21,8 @@ import (
 // Handler is the main world-edit player handler.
 type Handler struct {
 	player.NopHandler
-	p              *player.Player
-	selectionTrace visual.Wireframe
-	brushTrace     visual.Wireframe
+	p          *player.Player
+	brushTrace visual.Wireframe
 
 	cfg Config
 }
@@ -57,8 +56,8 @@ func (h *Handler) HandleItemUseOnBlock(ctx *player.Context, pos cube.Pos, face c
 		ctx.Cancel()
 		s := session.Ensure(h.p)
 		if s.SetPos2(pos) {
-			h.p.Messagef("pos2 set to %v", pos)
-			h.traceSelection(s)
+			h.p.Messagef("pos2 set to %v%s", pos, selectionui.SelectedBlocksSuffix(s))
+			selectionui.Trace(h.p, s)
 		}
 		return
 	}
@@ -80,8 +79,8 @@ func (h *Handler) HandleBlockBreak(ctx *player.Context, pos cube.Pos, drops *[]i
 		ctx.Cancel()
 		s := session.Ensure(h.p)
 		if s.SetPos1(pos) {
-			h.p.Messagef("pos1 set to %v", pos)
-			h.traceSelection(s)
+			h.p.Messagef("pos1 set to %v%s", pos, selectionui.SelectedBlocksSuffix(s))
+			selectionui.Trace(h.p, s)
 		}
 		return
 	}
@@ -90,21 +89,11 @@ func (h *Handler) HandleBlockBreak(ctx *player.Context, pos cube.Pos, drops *[]i
 // HandleQuit releases online-only session state while allowing clipboard
 // retention for reconnects during the same server lifetime.
 func (h *Handler) HandleQuit(*player.Player) {
-	h.selectionTrace.Remove(h.p)
+	selectionui.Remove(h.p)
 	h.brushTrace.Remove(h.p)
 	session.Delete(h.p)
 }
 
-func (h *Handler) traceSelection(s *session.Session) {
-	area, ok := s.SelectionArea()
-	if !ok {
-		h.selectionTrace.Remove(h.p)
-		return
-	}
-	h.selectionTrace.Draw(h.p, visual.AreaSegments(area), selectionTraceColour)
-}
-
-var selectionTraceColour = color.RGBA{R: 0, G: 255, B: 255, A: 255}
 var brushTraceColour = color.RGBA{R: 255, G: 180, B: 0, A: 255}
 
 func (h *Handler) heldWand() bool {
@@ -150,7 +139,7 @@ func (h *Handler) brushTarget(tx *world.Tx, cfg service.BrushConfig, start mgl64
 		return service.BrushAnchorFromSurface(pos.Side(face), face, cfg)
 	}
 	surface := cube.PosFromVec3(start.Add(dir.Mul(brushAirDistance(cfg, h.cfg.BrushMaxDistance))))
-	return service.BrushAnchorFromSurface(surface, dominantFace(dir), cfg)
+	return surface
 }
 
 func traceBrushBlock(start, end mgl64.Vec3, tx *world.Tx, skipDistance float64) (cube.Pos, cube.Face, bool) {
@@ -179,26 +168,4 @@ func brushAirDistance(cfg service.BrushConfig, maxDistance float64) float64 {
 		return maxDistance
 	}
 	return min(float64(cfg.Range), maxDistance)
-}
-
-func dominantFace(dir mgl64.Vec3) cube.Face {
-	x, y, z := dir[0], dir[1], dir[2]
-	ax, ay, az := math.Abs(x), math.Abs(y), math.Abs(z)
-	switch {
-	case ay >= ax && ay >= az:
-		if y < 0 {
-			return cube.FaceDown
-		}
-		return cube.FaceUp
-	case ax >= az:
-		if x < 0 {
-			return cube.FaceWest
-		}
-		return cube.FaceEast
-	default:
-		if z < 0 {
-			return cube.FaceNorth
-		}
-		return cube.FaceSouth
-	}
 }

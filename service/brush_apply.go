@@ -102,6 +102,9 @@ func BrushVolumeBounds(target cube.Pos, cfg BrushConfig) (area geo.Area, ok bool
 // generated volume extends out through face instead of being centred inside the
 // clicked block/player. Non-volume brushes use surface directly.
 func BrushAnchorFromSurface(surface cube.Pos, face cube.Face, cfg BrushConfig) cube.Pos {
+	if brushAnchorsOnHitBlock(strings.ToLower(cfg.Type)) {
+		return surface.Side(face.Opposite())
+	}
 	if !brushTypeUsesShapeVolume(strings.ToLower(cfg.Type)) {
 		return surface
 	}
