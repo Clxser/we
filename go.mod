@@ -21,10 +21,14 @@ require (
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/sandertv/go-raknet v1.15.1-0.20260112202637-beca0b10c217 // indirect
-	github.com/sandertv/gophertunnel v1.55.1 // indirect
+	github.com/sandertv/gophertunnel v1.56.2 // indirect
 	github.com/segmentio/fasthash v1.0.3 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 )
+
+replace github.com/sandertv/gophertunnel => github.com/Velvet-MC/gophertunnel v0.0.0-20260506213259-babfddcbb22e
+
+replace github.com/df-mc/dragonfly => github.com/Velvet-MC/dragonfly v0.0.0-20260506214925-4302377547f1
