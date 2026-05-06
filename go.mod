@@ -31,4 +31,4 @@ require (
 
 replace github.com/sandertv/gophertunnel => github.com/Velvet-MC/gophertunnel v0.0.0-20260506213259-babfddcbb22e
 
-replace github.com/df-mc/dragonfly => github.com/Velvet-MC/dragonfly v0.0.0-20260506214925-4302377547f1
+replace github.com/df-mc/dragonfly => github.com/Velvet-MC/dragonfly v0.0.0-20260506230618-76e105e6930e
