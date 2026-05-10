@@ -105,7 +105,25 @@ func (s FileSchematicStore) Save(name string, cb *Clipboard) error {
 }
 
 // Load reads a previously saved schematic into a Clipboard.
+//
+// Java-edition schematics (.schem Sponge v2, .schematic legacy MCEdit) are
+// preferred over the native .json format when both exist with the same
+// name — they're the format players are likely to upload. Translation of
+// Java block-states to Bedrock is delegated to the github.com/Clxser/S2D
+// library; the resulting unknown-block report is silently discarded by
+// this method (callers that want it should call ImportJavaSchematic
+// directly).
 func (s FileSchematicStore) Load(name string) (*Clipboard, error) {
+	if err := validateSchematicName(name); err != nil {
+		return nil, err
+	}
+	for _, ext := range []string{".schem", ".schematic"} {
+		p := filepath.Join(s.dir(), name+ext)
+		if _, statErr := os.Stat(p); statErr == nil {
+			cb, _, err := ImportJavaSchematic(p)
+			return cb, err
+		}
+	}
 	path, err := s.path(name)
 	if err != nil {
 		return nil, err
