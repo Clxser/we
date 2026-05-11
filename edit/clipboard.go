@@ -58,8 +58,24 @@ func pasteClipboardImpl(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.D
 	turns := rotationTurns(cb.OriginDir, dir)
 	entries := cb.Entries
 	if turns != 0 {
-		if consume {
-			// Mutate cb.Entries in place — no extra allocation.
+		if consume && !noAir && batch == nil {
+			tRot := startTrace("PasteClipboard.rotation_blocks_in_place")
+			transformEntryBlocksInPlace(entries, turns)
+			cb.OriginDir = dir
+			tRot.end()
+
+			tPaste := startTrace("PasteClipboard.pasteBuffer")
+			if writeRotatedDenseBufferNoBatch(tx, origin, entries, turns) {
+				tPaste.end()
+				return nil
+			}
+			traceAnnotate("writeRotatedDenseBuffer fast path skipped (entries not dense)")
+			tPaste.end()
+
+			tOffset := startTrace("PasteClipboard.rotation_offsets_in_place")
+			rotateEntryOffsetsInPlace(entries, turns)
+			tOffset.end()
+		} else if consume {
 			tRot := startTrace("PasteClipboard.rotation_in_place")
 			rotateEntriesInPlace(cb.Entries, turns)
 			cb.OriginDir = dir
@@ -88,10 +104,20 @@ func pasteClipboardImpl(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.D
 }
 
 func rotateEntriesInPlace(entries []bufferEntry, turns int) {
+	rotateEntryOffsetsInPlace(entries, turns)
+	transformEntryBlocksInPlace(entries, turns)
+}
+
+func rotateEntryOffsetsInPlace(entries []bufferEntry, turns int) {
+	for i := range entries {
+		entries[i].Offset = rotateOffset(entries[i].Offset, "y", turns)
+	}
+}
+
+func transformEntryBlocksInPlace(entries []bufferEntry, turns int) {
 	transform := blockTransform{axis: "y", turns: turns}
 	cache := make(blockTransformCache)
 	for i := range entries {
-		entries[i].Offset = rotateOffset(entries[i].Offset, "y", turns)
 		entries[i].Block = cache.transform(entries[i].Block, transform)
 		if entries[i].HasLiq {
 			if b, ok := cache.transform(entries[i].Liquid, transform).(world.Liquid); ok {

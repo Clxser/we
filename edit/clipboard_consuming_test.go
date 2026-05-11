@@ -6,6 +6,7 @@ import (
 	mcblock "github.com/df-mc/dragonfly/server/block"
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
+	"github.com/df-mc/we/parse"
 )
 
 func TestPasteClipboardConsumingKeepsRotatedDenseEntriesInPlaceOrder(t *testing.T) {
@@ -30,6 +31,12 @@ func TestPasteClipboardConsumingKeepsRotatedDenseEntriesInPlaceOrder(t *testing.
 	<-w.Exec(func(tx *world.Tx) {
 		if err := PasteClipboardConsuming(tx, cb, cube.Pos{}, cube.East, false, nil); err != nil {
 			t.Fatalf("PasteClipboardConsuming: %v", err)
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{-2, 0, 0}), mcblock.Stone{}) {
+			t.Fatalf("rotated dense paste missed expected block at (-2,0,0)")
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{0, 0, 1}), mcblock.Stone{}) {
+			t.Fatalf("rotated dense paste missed expected block at (0,0,1)")
 		}
 	})
 

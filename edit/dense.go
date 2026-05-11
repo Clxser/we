@@ -25,6 +25,13 @@ type denseBuffer struct {
 	ordered []bufferEntry
 }
 
+type rotatedDenseBuffer struct {
+	min    cube.Pos
+	dims   [3]int
+	source denseBuffer
+	turns  int
+}
+
 type denseBlockStructure struct {
 	d       [3]int
 	entries []denseBlockEntry
@@ -50,6 +57,24 @@ func (s bufferDenseStructure) Dimensions() [3]int { return s.d }
 
 func (s bufferDenseStructure) At(x, y, z int, _ func(x, y, z int) world.Block) (world.Block, world.Liquid) {
 	return structureLayers(s.entries[(x*s.d[1]+y)*s.d[2]+z])
+}
+
+type rotatedBufferDenseStructure struct {
+	min    cube.Pos
+	d      [3]int
+	source denseBuffer
+	turns  int
+}
+
+func (s rotatedBufferDenseStructure) Dimensions() [3]int { return s.d }
+
+func (s rotatedBufferDenseStructure) At(x, y, z int, _ func(x, y, z int) world.Block) (world.Block, world.Liquid) {
+	// The structure is addressed relative to the rotated minimum, not the
+	// original source minimum.
+	rotated := cube.Pos{x, y, z}.Add(s.min)
+	original := rotateOffset(rotated, "y", (4-s.turns)%4)
+	entry := s.source.ordered[denseIndex(original, s.source.min, s.source.dims)]
+	return structureLayers(entry)
 }
 
 type uniformBlockStructure struct {
@@ -192,6 +217,31 @@ func writeDenseBuffer(tx *world.Tx, origin cube.Pos, entries []bufferEntry, batc
 	return true
 }
 
+func writeRotatedDenseBufferNoBatch(tx *world.Tx, origin cube.Pos, entries []bufferEntry, turns int) bool {
+	tDense := startTrace("writeRotatedDenseBuffer.makeRotatedDenseBuffer")
+	layout, ok := makeRotatedDenseBuffer(entries, turns)
+	tDense.end()
+	if !ok {
+		return false
+	}
+	traceAnnotate("writeRotatedDenseBuffer fast path",
+		"layout_dims", layout.dims,
+		"layout_min", layout.min,
+		"ordered_len", len(layout.source.ordered),
+		"turns", layout.turns,
+	)
+	traceAnnotate("writeRotatedDense.no_batch fast path (zero-copy)", "cells", len(layout.source.ordered))
+	tBuild := startTrace("writeRotatedDense.tx.BuildStructure(no_batch)")
+	buildStructure(tx, origin.Add(layout.min), rotatedBufferDenseStructure{
+		min:    layout.min,
+		d:      layout.dims,
+		source: layout.source,
+		turns:  layout.turns,
+	})
+	tBuild.end()
+	return true
+}
+
 func writeDenseBufferLayout(tx *world.Tx, origin cube.Pos, layout denseBuffer, batch *history.Batch) {
 	writeDenseBufferLayoutScratch(tx, origin, layout, batch, nil)
 }
@@ -287,6 +337,52 @@ func makeDenseBuffer(entries []bufferEntry) (denseBuffer, bool) {
 		ordered[i] = entry
 	}
 	return denseBuffer{min: lo, dims: dims, ordered: ordered}, true
+}
+
+func makeRotatedDenseBuffer(entries []bufferEntry, turns int) (rotatedDenseBuffer, bool) {
+	turns = ((turns % 4) + 4) % 4
+	if turns == 0 {
+		return rotatedDenseBuffer{}, false
+	}
+	source, ok := makeDenseBuffer(entries)
+	if !ok {
+		return rotatedDenseBuffer{}, false
+	}
+	min, max := rotatedBounds(source.min, sourceMax(source), turns)
+	return rotatedDenseBuffer{
+		min:    min,
+		dims:   [3]int{max[0] - min[0] + 1, max[1] - min[1] + 1, max[2] - min[2] + 1},
+		source: source,
+		turns:  turns,
+	}, true
+}
+
+func sourceMax(source denseBuffer) cube.Pos {
+	return cube.Pos{
+		source.min[0] + source.dims[0] - 1,
+		source.min[1] + source.dims[1] - 1,
+		source.min[2] + source.dims[2] - 1,
+	}
+}
+
+func rotatedBounds(srcMin, srcMax cube.Pos, turns int) (cube.Pos, cube.Pos) {
+	first := true
+	var lo, hi cube.Pos
+	for _, x := range []int{srcMin[0], srcMax[0]} {
+		for _, y := range []int{srcMin[1], srcMax[1]} {
+			for _, z := range []int{srcMin[2], srcMax[2]} {
+				p := rotateOffset(cube.Pos{x, y, z}, "y", turns)
+				if first {
+					lo, hi = p, p
+					first = false
+					continue
+				}
+				lo = cube.Pos{min(lo[0], p[0]), min(lo[1], p[1]), min(lo[2], p[2])}
+				hi = cube.Pos{max(hi[0], p[0]), max(hi[1], p[1]), max(hi[2], p[2])}
+			}
+		}
+	}
+	return lo, hi
 }
 
 func orderDenseEntriesInPlace(entries []bufferEntry) bool {
