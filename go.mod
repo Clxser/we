@@ -3,7 +3,7 @@ module github.com/df-mc/we
 go 1.26.1
 
 require (
-	github.com/Velvet-MC/s2d v0.0.0-20260511171807-5e709935371f
+	github.com/Velvet-MC/s2d v0.0.0-20260511173222-9edb4fb365ce
 	github.com/df-mc/dragonfly v0.10.13
 	github.com/go-gl/mathgl v1.2.0
 	github.com/google/uuid v1.6.0

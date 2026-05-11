@@ -154,3 +154,64 @@ func TestRotateBlockTransformsInertSignStates(t *testing.T) {
 		})
 	}
 }
+
+func TestRotateBlockTransformsInertLeverAndButtonStates(t *testing.T) {
+	world.DefaultBlockRegistry.Finalize()
+	tests := []struct {
+		name      string
+		key       string
+		turns     int
+		wantProps map[string]any
+	}{
+		{
+			name:  "wall_button",
+			key:   "minecraft:oak_button[face=wall,facing=north,powered=false]",
+			turns: 1,
+			wantProps: map[string]any{
+				"facing_direction": int32(5),
+			},
+		},
+		{
+			name:  "wall_lever",
+			key:   "minecraft:lever[face=wall,facing=north,powered=false]",
+			turns: 1,
+			wantProps: map[string]any{
+				"lever_direction": "east",
+			},
+		},
+		{
+			name:  "floor_lever_axis",
+			key:   "minecraft:lever[face=floor,facing=north,powered=false]",
+			turns: 1,
+			wantProps: map[string]any{
+				"lever_direction": "up_east_west",
+			},
+		},
+		{
+			name:  "ceiling_lever_axis",
+			key:   "minecraft:lever[face=ceiling,facing=east,powered=false]",
+			turns: 1,
+			wantProps: map[string]any{
+				"lever_direction": "down_north_south",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := translate.Lookup(tt.key)
+			if !res.Recognized {
+				t.Fatalf("%s not recognized", tt.key)
+			}
+			rotated := RotateBlock(res.Block, "y", tt.turns)
+			_, props := rotated.EncodeBlock()
+			for key, want := range tt.wantProps {
+				if got := props[key]; got != want {
+					t.Fatalf("%s property %s = %#v (%T), want %#v (%T)", tt.key, key, got, got, want, want)
+				}
+			}
+			if _, stateHash := rotated.Hash(); stateHash != math.MaxUint64 {
+				t.Fatalf("rotated schematic lever/button should stay inert StateBlock, state hash = %d", stateHash)
+			}
+		})
+	}
+}

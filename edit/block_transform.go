@@ -213,6 +213,15 @@ func transformBlockProperties(original world.Block, name string, props map[strin
 			}
 		}
 	}
+	if v, ok := cp["lever_direction"]; ok {
+		if s, ok := v.(string); ok {
+			next := transformLeverDirection(s, t)
+			if next != s {
+				cp["lever_direction"] = next
+				changed = true
+			}
+		}
+	}
 	if v, ok := cp["torch_facing_direction"]; ok {
 		if s, ok := v.(string); ok {
 			if face, ok := torchFaceFromString(s); ok {
@@ -569,6 +578,32 @@ func wallConnectionKey(d cube.Direction) string {
 		return "wall_connection_type_west"
 	default:
 		return ""
+	}
+}
+
+func transformLeverDirection(s string, t blockTransform) string {
+	if d, ok := directionFromString(s); ok {
+		return transformDirection(d, t).String()
+	}
+	switch s {
+	case "up_north_south", "up_east_west", "down_north_south", "down_east_west":
+		prefix := "up_"
+		axisPart := strings.TrimPrefix(s, "up_")
+		if strings.HasPrefix(s, "down_") {
+			prefix = "down_"
+			axisPart = strings.TrimPrefix(s, "down_")
+		}
+		axis := cube.Z
+		if axisPart == "east_west" {
+			axis = cube.X
+		}
+		next := transformAxis(axis, t)
+		if next == cube.X {
+			return prefix + "east_west"
+		}
+		return prefix + "north_south"
+	default:
+		return s
 	}
 }
 
