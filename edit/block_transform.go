@@ -195,6 +195,9 @@ func transformBlockProperties(name string, props map[string]any, t blockTransfor
 }
 
 func transformDirection(d cube.Direction, t blockTransform) cube.Direction {
+	if !validDirection(d) {
+		return d
+	}
 	if t.flip {
 		switch t.axis {
 		case "x":
@@ -215,6 +218,15 @@ func transformDirection(d cube.Direction, t blockTransform) cube.Direction {
 		d = d.RotateRight()
 	}
 	return d
+}
+
+func validDirection(d cube.Direction) bool {
+	switch d {
+	case cube.North, cube.South, cube.West, cube.East:
+		return true
+	default:
+		return false
+	}
 }
 
 func transformFace(f cube.Face, t blockTransform) cube.Face {
