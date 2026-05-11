@@ -155,6 +155,26 @@ func TestRotateBlockTransformsInertSignStates(t *testing.T) {
 	}
 }
 
+func TestRotateBlockPreservesInertBlockNBT(t *testing.T) {
+	world.DefaultBlockRegistry.Finalize()
+	res := translate.Lookup("minecraft:red_banner[rotation=0]")
+	if !res.Recognized {
+		t.Fatal("red banner not recognized")
+	}
+	rotated := RotateBlock(res.Block, "y", 1)
+	nbter, ok := rotated.(world.NBTer)
+	if !ok {
+		t.Fatalf("rotated banner %T does not implement NBTer", rotated)
+	}
+	nbt := nbter.EncodeNBT()
+	if got := nbt["id"]; got != "Banner" {
+		t.Fatalf("id = %#v, want Banner", got)
+	}
+	if got := nbt["Base"]; got != int32(14) {
+		t.Fatalf("Base = %#v (%T), want red banner base 14", got, got)
+	}
+}
+
 func TestRotateBlockTransformsInertLeverAndButtonStates(t *testing.T) {
 	world.DefaultBlockRegistry.Finalize()
 	tests := []struct {

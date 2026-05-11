@@ -139,6 +139,9 @@ func transformBlockProperties(original world.Block, name string, props map[strin
 			t.flip,
 		)
 		if changed {
+			if nbter, ok := original.(world.NBTer); ok {
+				return translate.NewStateBlockWithNBT(state, nbter.EncodeNBT()), true
+			}
 			return translate.NewStateBlock(state), true
 		}
 		return nil, false
