@@ -161,10 +161,18 @@ func writeDenseArea(tx *world.Tx, area geo.Area, blockAt func(cube.Pos) world.Bl
 // through BuildStructure. It returns false when entries are sparse or have
 // duplicate offsets, in which case callers should fall back to SetBlock writes.
 func writeDenseBuffer(tx *world.Tx, origin cube.Pos, entries []bufferEntry, batch *history.Batch) bool {
+	tDense := startTrace("writeDenseBuffer.makeDenseBuffer")
 	layout, ok := makeDenseBuffer(entries)
+	tDense.end()
 	if !ok {
+		traceAnnotate("writeDenseBuffer fast path skipped (entries not dense)")
 		return false
 	}
+	traceAnnotate("writeDenseBuffer fast path",
+		"layout_dims", layout.dims,
+		"layout_min", layout.min,
+		"ordered_len", len(layout.ordered),
+	)
 	writeDenseBufferLayout(tx, origin, layout, batch)
 	return true
 }
@@ -176,16 +184,22 @@ func writeDenseBufferLayout(tx *world.Tx, origin cube.Pos, layout denseBuffer, b
 func writeDenseBufferLayoutScratch(tx *world.Tx, origin cube.Pos, layout denseBuffer, batch *history.Batch, denseEntries []denseBlockEntry) []denseBlockEntry {
 	n := len(layout.ordered)
 	if batch == nil {
+		tAlloc := startTrace("writeDense.denseEntries_alloc(no_batch)")
 		if cap(denseEntries) < n {
 			denseEntries = make([]denseBlockEntry, n)
 		} else {
 			denseEntries = denseEntries[:n]
 		}
+		tAlloc.end()
+		tFill := startTrace("writeDense.denseEntries_fill(no_batch)")
 		for i, entry := range layout.ordered {
 			block, liq := structureLayers(entry)
 			denseEntries[i] = denseBlockEntry{Pos: origin.Add(entry.Offset), Index: -1, Block: block, Liq: liq}
 		}
+		tFill.end()
+		tBuild := startTrace("writeDense.tx.BuildStructure(no_batch)")
 		buildStructure(tx, origin.Add(layout.min), denseBlockStructure{d: layout.dims, entries: denseEntries})
+		tBuild.end()
 		return denseEntries
 	}
 	batch.Grow(n)

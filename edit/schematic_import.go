@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
@@ -49,16 +50,28 @@ func ImportJavaSchematic(path string) (*Clipboard, JavaSchematicReport, error) {
 	}
 	defer f.Close()
 
+	tRead := startTrace("import.schem.Read")
 	s, err := schem.Read(filepath.Base(path), f)
+	tRead.end()
 	if err != nil {
 		return nil, JavaSchematicReport{}, fmt.Errorf("import %s: %w", filepath.Base(path), err)
 	}
+	traceAnnotate("import.schem.Read result",
+		"width", s.Width, "height", s.Height, "length", s.Length,
+		"cells", len(s.Blocks),
+		"unknown_kinds", len(s.Unknowns.Counts),
+		"unknown_cells", s.Unknowns.Total,
+	)
 
+	tAlloc := startTrace("import.cb.Entries.make")
 	h, l := s.Height, s.Length
 	cb := &Clipboard{
 		OriginDir: cube.North,
 		Entries:   make([]bufferEntry, len(s.Blocks)),
 	}
+	tAlloc.end()
+
+	tFill := startTrace("import.cb.Entries.fill")
 	for i := range s.Blocks {
 		b := &s.Blocks[i]
 		idx := (b.Pos[0]*h+b.Pos[1])*l + b.Pos[2]
@@ -72,6 +85,7 @@ func ImportJavaSchematic(path string) (*Clipboard, JavaSchematicReport, error) {
 			}
 		}
 	}
+	tFill.end()
 
 	rep := JavaSchematicReport{
 		Format: string(s.Format),
@@ -83,7 +97,14 @@ func ImportJavaSchematic(path string) (*Clipboard, JavaSchematicReport, error) {
 	}
 	// Drop the s.Blocks reference so the GC can reclaim ~5 GB on arena-scale
 	// imports; the data has been copied into cb.Entries.
+	tDrop := startTrace("import.s.Blocks=nil+GC")
 	s.Blocks = nil
+	if PasteTracingEnabled() {
+		// Force a GC so trace measurements after this point reflect the
+		// freed memory rather than waiting for the next periodic sweep.
+		runtime.GC()
+	}
+	tDrop.end()
 
 	return cb, rep, nil
 }

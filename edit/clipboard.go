@@ -31,9 +31,17 @@ func PasteClipboard(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.Direc
 	if cb == nil || len(cb.Entries) == 0 {
 		return fmt.Errorf("clipboard is empty")
 	}
+	traceAnnotate("PasteClipboard begin",
+		"cells", len(cb.Entries),
+		"origin_dir", cb.OriginDir.String(),
+		"paste_dir", dir.String(),
+		"no_air", noAir,
+		"with_history", batch != nil,
+	)
 	turns := rotationTurns(cb.OriginDir, dir)
 	entries := cb.Entries
 	if turns != 0 {
+		tRot := startTrace("PasteClipboard.rotation_copy")
 		entries = make([]bufferEntry, len(cb.Entries))
 		copy(entries, cb.Entries)
 		transform := blockTransform{axis: "y", turns: turns}
@@ -47,8 +55,13 @@ func PasteClipboard(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.Direc
 				}
 			}
 		}
+		tRot.end()
+	} else {
+		traceAnnotate("PasteClipboard.rotation_skipped (turns=0)")
 	}
+	tPaste := startTrace("PasteClipboard.pasteBuffer")
 	pasteBuffer(tx, origin, entries, noAir, batch)
+	tPaste.end()
 	return nil
 }
 
