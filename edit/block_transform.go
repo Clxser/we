@@ -131,6 +131,18 @@ func transformBlockProperties(original world.Block, name string, props map[strin
 	if len(props) == 0 {
 		return nil, false
 	}
+	if _, stateHash := original.Hash(); stateHash == math.MaxUint64 {
+		state, changed := translate.TransformBedrockState(
+			translate.BedrockState{Name: name, Properties: props},
+			t.axis,
+			t.turns,
+			t.flip,
+		)
+		if changed {
+			return translate.NewStateBlock(state), true
+		}
+		return nil, false
+	}
 	cp := make(map[string]any, len(props))
 	for k, v := range props {
 		cp[k] = v
@@ -238,9 +250,6 @@ func transformBlockProperties(original world.Block, name string, props map[strin
 	}
 	if !changed {
 		return nil, false
-	}
-	if _, stateHash := original.Hash(); stateHash == math.MaxUint64 {
-		return translate.NewStateBlock(translate.BedrockState{Name: name, Properties: cp}), true
 	}
 	out, ok := world.BlockByName(name, cp)
 	return out, ok

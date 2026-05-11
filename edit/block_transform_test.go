@@ -215,3 +215,39 @@ func TestRotateBlockTransformsInertLeverAndButtonStates(t *testing.T) {
 		})
 	}
 }
+
+func TestRotateBlockTransformsInertRailStates(t *testing.T) {
+	world.DefaultBlockRegistry.Finalize()
+	tests := []struct {
+		name string
+		key  string
+		want int32
+	}{
+		{
+			name: "normal_rail_corner",
+			key:  "minecraft:rail[shape=north_east,waterlogged=false]",
+			want: int32(6), // north_east rotates to south_east.
+		},
+		{
+			name: "powered_rail_slope",
+			key:  "minecraft:powered_rail[powered=true,shape=ascending_east,waterlogged=false]",
+			want: int32(5), // ascending east rotates to ascending south.
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := translate.Lookup(tt.key)
+			if !res.Recognized {
+				t.Fatalf("%s not recognized", tt.key)
+			}
+			rotated := RotateBlock(res.Block, "y", 1)
+			_, props := rotated.EncodeBlock()
+			if got := props["rail_direction"]; got != tt.want {
+				t.Fatalf("%s rail_direction = %#v (%T), want %#v", tt.key, got, got, tt.want)
+			}
+			if _, stateHash := rotated.Hash(); stateHash != math.MaxUint64 {
+				t.Fatalf("rotated schematic rail should stay inert StateBlock, state hash = %d", stateHash)
+			}
+		})
+	}
+}
