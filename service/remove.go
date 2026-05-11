@@ -29,7 +29,10 @@ func RemoveAboveWithOptions(tx *world.Tx, s Session, center cube.Pos, args []str
 	if err := checkArea(guardrailsFor(s), area); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
+	batch, err := historyBatchForSize(opts, area.Volume())
+	if err != nil {
+		return ChangeResult{}, err
+	}
 	edit.ClearArea(tx, area, batch)
 	return finishEdit(s, batch, int(area.Volume())), nil
 }
@@ -49,7 +52,10 @@ func RemoveBelowWithOptions(tx *world.Tx, s Session, center cube.Pos, args []str
 	if err := checkArea(guardrailsFor(s), area); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
+	batch, err := historyBatchForSize(opts, area.Volume())
+	if err != nil {
+		return ChangeResult{}, err
+	}
 	edit.ClearArea(tx, area, batch)
 	return finishEdit(s, batch, int(area.Volume())), nil
 }
@@ -96,7 +102,10 @@ func RemoveNearWithOptions(tx *world.Tx, s Session, center cube.Pos, args []stri
 	if err := checkArea(guardrailsFor(s), area); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
+	batch, err := historyBatchForSize(opts, area.Volume())
+	if err != nil {
+		return ChangeResult{}, err
+	}
 	edit.RemoveNear(tx, center, radius, edit.BlockMask{Blocks: blocks}, batch)
 	return finishEdit(s, batch, int(area.Volume())), nil
 }
@@ -111,7 +120,10 @@ func NaturalizeWithOptions(tx *world.Tx, s Session, opts EditOptions) (ChangeRes
 	if err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
+	batch, err := historyBatchForSize(opts, area.Volume())
+	if err != nil {
+		return ChangeResult{}, err
+	}
 	edit.Naturalize(tx, area, batch)
 	return finishEdit(s, batch, int(area.Volume())), nil
 }

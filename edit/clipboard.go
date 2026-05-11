@@ -67,6 +67,7 @@ func pasteClipboardImpl(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.D
 			tPaste := startTrace("PasteClipboard.pasteBuffer")
 			if writeRotatedDenseBufferNoBatch(tx, origin, entries, turns) {
 				tPaste.end()
+				releaseConsumedClipboard(cb, consume)
 				return nil
 			}
 			traceAnnotate("writeRotatedDenseBuffer fast path skipped (entries not dense)")
@@ -100,7 +101,14 @@ func pasteClipboardImpl(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.D
 	tPaste := startTrace("PasteClipboard.pasteBuffer")
 	pasteBuffer(tx, origin, entries, noAir, batch)
 	tPaste.end()
+	releaseConsumedClipboard(cb, consume)
 	return nil
+}
+
+func releaseConsumedClipboard(cb *Clipboard, consume bool) {
+	if consume {
+		cb.Entries = nil
+	}
 }
 
 func rotateEntriesInPlace(entries []bufferEntry, turns int) {

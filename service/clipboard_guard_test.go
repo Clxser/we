@@ -26,3 +26,26 @@ func TestEnsureClipboardUndoBudgetAllowsNormalUndo(t *testing.T) {
 		t.Fatalf("normal undoable paste rejected: %v", err)
 	}
 }
+
+func TestHistoryBatchForSizeRejectsHugeUndoableEdit(t *testing.T) {
+	batch, err := historyBatchForSize(EditOptions{}, maxUndoEditPositions+1)
+	if err == nil {
+		t.Fatal("expected huge undoable edit to be rejected")
+	}
+	if batch != nil {
+		t.Fatal("rejected edit returned a history batch")
+	}
+	if !strings.Contains(err.Error(), "-noundo") {
+		t.Fatalf("error %q should tell operators to use -noundo", err)
+	}
+}
+
+func TestHistoryBatchForSizeAllowsHugeNoUndoEdit(t *testing.T) {
+	batch, err := historyBatchForSize(EditOptions{NoUndo: true}, maxUndoEditPositions+1)
+	if err != nil {
+		t.Fatalf("NoUndo edit rejected: %v", err)
+	}
+	if batch != nil {
+		t.Fatal("NoUndo edit returned a history batch")
+	}
+}

@@ -37,7 +37,10 @@ func MoveWithOptions(tx *world.Tx, s Session, dir cube.Pos, args []string, opts 
 	if err := guardrailsFor(s).CheckEditSubChunks(geo.UniqueSubChunks(area, dest)); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
+	batch, err := historyBatchForSize(opts, area.Volume()*2)
+	if err != nil {
+		return ChangeResult{}, err
+	}
 	edit.Move(tx, area, dir, dist, mask, HasFlag(args[2:], "-a"), batch)
 	return finishEdit(s, batch, int(area.Volume())*2), nil
 }
@@ -66,7 +69,10 @@ func StackWithOptions(tx *world.Tx, s Session, dir cube.Pos, args []string, opts
 	if err := guardrailsFor(s).CheckEditSubChunks(stackEditBounds(area, dir, amount).SubChunkCount()); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
+	batch, err := historyBatchForSize(opts, area.Volume()*int64(amount))
+	if err != nil {
+		return ChangeResult{}, err
+	}
 	edit.Stack(tx, area, dir, amount, HasFlag(args[1:], "-a"), batch)
 	return finishEdit(s, batch, int(area.Volume())*amount), nil
 }

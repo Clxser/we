@@ -9,7 +9,7 @@ import (
 	"github.com/df-mc/we/parse"
 )
 
-func TestPasteClipboardConsumingKeepsRotatedDenseEntriesInPlaceOrder(t *testing.T) {
+func TestPasteClipboardConsumingReleasesEntriesAfterPaste(t *testing.T) {
 	cb := &Clipboard{OriginDir: cube.North}
 	for x := 0; x < 2; x++ {
 		for y := 0; y < 1; y++ {
@@ -40,11 +40,7 @@ func TestPasteClipboardConsumingKeepsRotatedDenseEntriesInPlaceOrder(t *testing.
 		}
 	})
 
-	layout, ok := makeDenseBuffer(cb.Entries)
-	if !ok {
-		t.Fatal("rotated consuming clipboard is no longer dense")
-	}
-	if len(layout.ordered) == 0 || &layout.ordered[0] != &cb.Entries[0] {
-		t.Fatal("rotated consuming clipboard was not reordered in place for dense zero-copy paste")
+	if len(cb.Entries) != 0 {
+		t.Fatalf("consumed clipboard retained %d entries after paste, want released", len(cb.Entries))
 	}
 }

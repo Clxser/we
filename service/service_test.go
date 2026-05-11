@@ -141,6 +141,23 @@ func TestSetWithNoUndoWritesWithoutRecording(t *testing.T) {
 	})
 }
 
+func TestSetRejectsHugeUndoableSelection(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		s := newFakeSession(geo.NewArea(0, 0, 0, 1_000_000, 0, 0))
+
+		_, err := service.Set(tx, s, "air")
+		if err == nil {
+			t.Fatal("Set succeeded, want large undo guard error")
+		}
+		if !strings.Contains(err.Error(), "-noundo") {
+			t.Fatalf("Set error = %v, want -noundo hint", err)
+		}
+		if s.records != 0 {
+			t.Fatalf("Record called %d times, want 0", s.records)
+		}
+	})
+}
+
 func TestSetWithNoUndoPreservesOlderUndoHistory(t *testing.T) {
 	withTx(t, func(tx *world.Tx) {
 		area := geo.NewArea(0, 0, 0, 0, 0, 0)

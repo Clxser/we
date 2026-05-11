@@ -76,9 +76,12 @@ func CutWithOptions(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction
 	if err != nil {
 		return ChangeResult{}, err
 	}
+	batch, err := historyBatchForSize(opts, area.Volume())
+	if err != nil {
+		return ChangeResult{}, err
+	}
 	cb := edit.CopySelection(tx, area, origin, dir, edit.BlockMask{All: true, IncludeAir: true}, false)
 	s.SetClipboard(cb)
-	batch := historyBatch(opts)
 	edit.ClearArea(tx, area, batch)
 	return finishEdit(s, batch, int(area.Volume())), nil
 }
@@ -122,6 +125,7 @@ func Schematic(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, sto
 		if err := ensureClipboardUndoBudget(len(cb.Entries), opts); err != nil {
 			return SchematicResult{}, err
 		}
+		changed := len(cb.Entries)
 		batch := historyBatch(opts)
 		// PasteClipboardConsuming mutates cb in place — safe here because the
 		// clipboard was just loaded from the store solely for this paste and
@@ -129,7 +133,7 @@ func Schematic(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, sto
 		if err := edit.PasteClipboardConsuming(tx, cb, origin, dir, noAir, batch); err != nil {
 			return SchematicResult{}, err
 		}
-		result := finishEdit(s, batch, len(cb.Entries))
+		result := finishEdit(s, batch, changed)
 		return SchematicResult{Name: args[1], Changed: result.Changed}, nil
 	case "delete":
 		if len(args) < 2 {

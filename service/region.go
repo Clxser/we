@@ -26,13 +26,12 @@ func SetWithOptions(tx *world.Tx, s Session, blockSpec string, opts EditOptions)
 	if err != nil {
 		return ChangeResult{}, err
 	}
-	if opts.NoUndo {
-		edit.FillArea(tx, area, blocks, nil)
-		return ChangeResult{Changed: int(area.Volume())}, nil
+	batch, err := historyBatchForSize(opts, area.Volume())
+	if err != nil {
+		return ChangeResult{}, err
 	}
-	batch := history.NewBatch(false)
 	edit.FillArea(tx, area, blocks, batch)
-	return record(s, batch), nil
+	return finishEdit(s, batch, int(area.Volume())), nil
 }
 
 // Center places one block at the centre of the selection and returns its position.
@@ -65,7 +64,10 @@ func WallsWithOptions(tx *world.Tx, s Session, blockSpec string, opts EditOption
 	if err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
+	batch, err := historyBatchForSize(opts, area.Volume())
+	if err != nil {
+		return ChangeResult{}, err
+	}
 	edit.Walls(tx, area, blocks, batch)
 	return finishEdit(s, batch, int(area.Volume())), nil
 }
@@ -85,9 +87,12 @@ func DrainWithOptions(tx *world.Tx, s Session, center cube.Pos, radius int, opts
 	if err := checkArea(guardrailsFor(s), area); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
-	edit.Drain(tx, center, radius, batch)
 	diameter := radius*2 + 1
+	batch, err := historyBatchForSize(opts, int64(diameter)*int64(diameter)*int64(diameter))
+	if err != nil {
+		return ChangeResult{}, err
+	}
+	edit.Drain(tx, center, radius, batch)
 	return finishEdit(s, batch, diameter*diameter*diameter), nil
 }
 
@@ -116,11 +121,14 @@ func SetBiomeWithOptions(tx *world.Tx, s Session, name string, opts EditOptions)
 	if err != nil {
 		return nil, err
 	}
-	if opts.NoUndo {
+	batch, err := historyBatchForSize(opts, area.Volume())
+	if err != nil {
+		return nil, err
+	}
+	if batch == nil {
 		area.Range(func(x, y, z int) { tx.SetBiome(cube.Pos{x, y, z}, b) })
 		return b, nil
 	}
-	batch := history.NewBatch(false)
 	area.Range(func(x, y, z int) { batch.SetBiome(tx, cube.Pos{x, y, z}, b) })
 	s.Record(batch)
 	return b, nil
@@ -144,7 +152,10 @@ func ReplaceWithOptions(tx *world.Tx, s Session, args []string, opts EditOptions
 	if err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
+	batch, err := historyBatchForSize(opts, area.Volume())
+	if err != nil {
+		return ChangeResult{}, err
+	}
 	edit.ReplaceArea(tx, area, mask, to, batch)
 	return finishEdit(s, batch, int(area.Volume())), nil
 }
@@ -168,9 +179,12 @@ func ReplaceNearWithOptions(tx *world.Tx, s Session, center cube.Pos, distance i
 	if err := checkArea(guardrailsFor(s), area); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
-	edit.ReplaceNear(tx, center, distance, mask, to, batch)
 	diameter := distance*2 + 1
+	batch, err := historyBatchForSize(opts, int64(diameter)*int64(diameter)*int64(diameter))
+	if err != nil {
+		return ChangeResult{}, err
+	}
+	edit.ReplaceNear(tx, center, distance, mask, to, batch)
 	return finishEdit(s, batch, diameter*diameter*diameter), nil
 }
 
@@ -192,9 +206,13 @@ func TopLayerWithOptions(tx *world.Tx, s Session, args []string, opts EditOption
 	if err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
+	approx := area.Dx() * area.Dz()
+	batch, err := historyBatchForSize(opts, int64(approx))
+	if err != nil {
+		return ChangeResult{}, err
+	}
 	edit.TopLayer(tx, area, mask, to, batch)
-	return finishEdit(s, batch, area.Dx()*area.Dz()), nil
+	return finishEdit(s, batch, approx), nil
 }
 
 // Overlay places blocks one layer above the highest non-air block in each column.
@@ -211,7 +229,11 @@ func OverlayWithOptions(tx *world.Tx, s Session, blockSpec string, opts EditOpti
 	if err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
+	approx := area.Dx() * area.Dz()
+	batch, err := historyBatchForSize(opts, int64(approx))
+	if err != nil {
+		return ChangeResult{}, err
+	}
 	edit.Overlay(tx, area, blocks, batch)
-	return finishEdit(s, batch, area.Dx()*area.Dz()), nil
+	return finishEdit(s, batch, approx), nil
 }

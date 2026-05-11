@@ -32,13 +32,17 @@ func LineWithOptions(tx *world.Tx, s Session, args []string, opts EditOptions) (
 	if !ok {
 		return ChangeResult{}, ErrSelectionRequired
 	}
-	batch := historyBatch(opts)
-	edit.Line(tx, pos1, pos2, thickness, blocks, batch)
 	steps := max(abs(pos2[0]-pos1[0]), max(abs(pos2[1]-pos1[1]), abs(pos2[2]-pos1[2])))
 	if steps == 0 {
 		steps = 1
 	}
-	return finishEdit(s, batch, (steps+1)*max(1, thickness)*max(1, thickness)*max(1, thickness)), nil
+	approx := (steps + 1) * max(1, thickness) * max(1, thickness) * max(1, thickness)
+	batch, err := historyBatchForSize(opts, int64(approx))
+	if err != nil {
+		return ChangeResult{}, err
+	}
+	edit.Line(tx, pos1, pos2, thickness, blocks, batch)
+	return finishEdit(s, batch, approx), nil
 }
 
 // Shape applies a primitive of kind centred at anchor. The "-h" flag in args
@@ -70,9 +74,13 @@ func ShapeWithOptions(tx *world.Tx, s Session, anchor cube.Pos, kind edit.ShapeK
 	if err := limits.CheckEditSubChunks(bounds.SubChunkCount()); err != nil {
 		return ChangeResult{}, err
 	}
-	batch := historyBatch(opts)
+	approx := int(spec.Bounds(anchor).Volume())
+	batch, err := historyBatchForSize(opts, int64(approx))
+	if err != nil {
+		return ChangeResult{}, err
+	}
 	edit.ApplyShape(tx, anchor, spec, blocks, batch)
-	return finishEdit(s, batch, int(spec.Bounds(anchor).Volume())), nil
+	return finishEdit(s, batch, approx), nil
 }
 
 // ParseShapeArgs parses a shape's argument list into a ShapeSpec and block list.
