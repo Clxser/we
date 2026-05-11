@@ -51,6 +51,9 @@ func PasteWithOptions(tx *world.Tx, s Session, origin cube.Pos, dir cube.Directi
 	if err := guardrailsFor(s).CheckEditSubChunks(edit.PasteSubChunkCount(cb, origin, dir, noAir)); err != nil {
 		return ChangeResult{}, err
 	}
+	if err := ensureClipboardUndoBudget(len(cb.Entries), opts); err != nil {
+		return ChangeResult{}, err
+	}
 	batch := historyBatch(opts)
 	if err := edit.PasteClipboard(tx, cb, origin, dir, noAir, batch); err != nil {
 		return ChangeResult{}, err
@@ -114,6 +117,9 @@ func Schematic(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, sto
 		}
 		noAir := HasFlag(pasteArgs, "-a")
 		if err := guardrailsFor(s).CheckEditSubChunks(edit.PasteSubChunkCount(cb, origin, dir, noAir)); err != nil {
+			return SchematicResult{}, err
+		}
+		if err := ensureClipboardUndoBudget(len(cb.Entries), opts); err != nil {
 			return SchematicResult{}, err
 		}
 		batch := historyBatch(opts)
