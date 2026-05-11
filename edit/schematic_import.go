@@ -107,3 +107,46 @@ func ImportJavaSchematic(path string) (*Clipboard, JavaSchematicReport, error) {
 
 	return cb, rep, nil
 }
+
+// ImportJavaCompactSchematic reads a Sponge v2 (.schem) or legacy MCEdit
+// (.schematic) file into a compact palette-backed dense schematic.
+func ImportJavaCompactSchematic(path string) (*CompactSchematic, JavaSchematicReport, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, JavaSchematicReport{}, err
+	}
+	defer func() { _ = f.Close() }()
+
+	var compact *CompactSchematic
+	tRead := startTrace("import.compact.schem.Scan")
+	info, err := schem.ScanWithInfo(filepath.Base(path), f, func(info schem.ScanInfo) error {
+		var err error
+		compact, err = NewCompactSchematic(info.Width, info.Height, info.Length)
+		return err
+	}, func(b schem.Block) error {
+		if compact == nil {
+			return fmt.Errorf("schematic metadata was not read before block data")
+		}
+		return compact.AddBlock(cube.Pos{b.Pos[0], b.Pos[1], b.Pos[2]}, b.Block, b.Liquid)
+	})
+	tRead.end()
+	if err != nil {
+		return nil, JavaSchematicReport{}, fmt.Errorf("import compact %s: %w", filepath.Base(path), err)
+	}
+	traceAnnotate("import.compact.schem.Scan result",
+		"width", info.Width, "height", info.Height, "length", info.Length,
+		"cells", compact.Volume(),
+		"palette", compact.PaletteLen(),
+		"unknown_kinds", len(info.Unknowns.Counts),
+		"unknown_cells", info.Unknowns.Total,
+	)
+	rep := JavaSchematicReport{
+		Format: string(info.Format),
+		Counts: info.Unknowns.Counts,
+		Total:  info.Unknowns.Total,
+		Width:  info.Width,
+		Height: info.Height,
+		Length: info.Length,
+	}
+	return compact, rep, nil
+}

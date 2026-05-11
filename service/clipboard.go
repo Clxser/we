@@ -114,11 +114,28 @@ func Schematic(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, sto
 			return SchematicResult{}, fmt.Errorf("schematic paste requires a name")
 		}
 		pasteArgs, opts := ParseEditOptions(args[2:])
+		noAir := HasFlag(pasteArgs, "-a")
+		if opts.NoUndo && !noAir {
+			if compactStore, ok := store.(edit.CompactJavaSchematicStore); ok {
+				compact, _, found, err := compactStore.LoadCompactJavaSchematic(args[1])
+				if err != nil {
+					return SchematicResult{}, err
+				}
+				if found {
+					if err := guardrailsFor(s).CheckEditSubChunks(edit.CompactPasteSubChunkCount(compact, origin, dir)); err != nil {
+						return SchematicResult{}, err
+					}
+					if err := edit.PasteCompactSchematicNoUndo(tx, compact, origin, dir); err != nil {
+						return SchematicResult{}, err
+					}
+					return SchematicResult{Name: args[1], Changed: compact.Volume()}, nil
+				}
+			}
+		}
 		cb, err := store.Load(args[1])
 		if err != nil {
 			return SchematicResult{}, err
 		}
-		noAir := HasFlag(pasteArgs, "-a")
 		if err := guardrailsFor(s).CheckEditSubChunks(edit.PasteSubChunkCount(cb, origin, dir, noAir)); err != nil {
 			return SchematicResult{}, err
 		}

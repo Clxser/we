@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -444,6 +445,78 @@ func TestSchematicRoundTrip(t *testing.T) {
 			t.Fatal("schematic paste did not restore saved block")
 		}
 	})
+}
+
+func TestSchematicPasteNoUndoUsesCompactJavaFastPath(t *testing.T) {
+	var failure string
+	withTx(t, func(tx *world.Tx) {
+		compact, err := edit.NewCompactSchematic(2, 1, 1)
+		if err != nil {
+			failure = err.Error()
+			return
+		}
+		if err := compact.AddBlock(cube.Pos{0, 0, 0}, mcblock.Stone{}, nil); err != nil {
+			failure = err.Error()
+			return
+		}
+		if err := compact.AddBlock(cube.Pos{1, 0, 0}, mcblock.Dirt{}, nil); err != nil {
+			failure = err.Error()
+			return
+		}
+		store := &compactOnlyStore{compact: compact}
+		s := newFakeSession(geo.NewArea(0, 0, 0, 0, 0, 0))
+
+		pasted, err := service.Schematic(tx, s, cube.Pos{5, 0, 0}, cube.North, store, []string{"paste", "arena", "-noundo"})
+		if err != nil {
+			failure = err.Error()
+			return
+		}
+		if pasted.Changed != 2 {
+			failure = fmt.Sprintf("changed = %d, want 2", pasted.Changed)
+			return
+		}
+		if store.loadCalled {
+			failure = "compact no-undo paste fell back to clipboard Load"
+			return
+		}
+		if !store.compactCalled {
+			failure = "compact no-undo paste did not call compact loader"
+			return
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{5, 0, 0}), mcblock.Stone{}) {
+			failure = fmt.Sprintf("compact paste missed stone, got %T", tx.Block(cube.Pos{5, 0, 0}))
+			return
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{6, 0, 0}), mcblock.Dirt{}) {
+			failure = fmt.Sprintf("compact paste missed dirt, got %T", tx.Block(cube.Pos{6, 0, 0}))
+			return
+		}
+	})
+	if failure != "" {
+		t.Fatal(failure)
+	}
+}
+
+type compactOnlyStore struct {
+	compact       *edit.CompactSchematic
+	loadCalled    bool
+	compactCalled bool
+}
+
+func (s *compactOnlyStore) Save(string, *edit.Clipboard) error { return nil }
+
+func (s *compactOnlyStore) Load(string) (*edit.Clipboard, error) {
+	s.loadCalled = true
+	return nil, errors.New("clipboard load should not be called")
+}
+
+func (s *compactOnlyStore) Delete(string) error { return nil }
+
+func (s *compactOnlyStore) List() ([]string, error) { return nil, nil }
+
+func (s *compactOnlyStore) LoadCompactJavaSchematic(string) (*edit.CompactSchematic, edit.JavaSchematicReport, bool, error) {
+	s.compactCalled = true
+	return s.compact, edit.JavaSchematicReport{Width: 2, Height: 1, Length: 1}, true, nil
 }
 
 func TestReplaceOnlyMatchingBlocks(t *testing.T) {

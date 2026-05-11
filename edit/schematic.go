@@ -24,6 +24,13 @@ type SchematicStore interface {
 	List() ([]string, error)
 }
 
+// CompactJavaSchematicStore optionally exposes a memory-efficient fast path
+// for Java schematic files. found is false when no Java schematic exists for
+// name, allowing callers to fall back to the regular SchematicStore path.
+type CompactJavaSchematicStore interface {
+	LoadCompactJavaSchematic(name string) (*CompactSchematic, JavaSchematicReport, bool, error)
+}
+
 // FileSchematicStore stores schematic JSON files in a directory.
 type FileSchematicStore struct {
 	Dir string
@@ -122,14 +129,11 @@ func (s FileSchematicStore) Load(name string) (*Clipboard, error) {
 	if err := validateSchematicName(name); err != nil {
 		return nil, err
 	}
-	for _, ext := range javaSchematicExtensions {
-		p := filepath.Join(s.dir(), name+ext)
-		if _, statErr := os.Stat(p); statErr == nil {
-			cb, _, err := ImportJavaSchematic(p)
-			return cb, err
-		} else if !os.IsNotExist(statErr) {
-			return nil, statErr
-		}
+	if p, found, err := s.javaSchematicPath(name); err != nil {
+		return nil, err
+	} else if found {
+		cb, _, err := ImportJavaSchematic(p)
+		return cb, err
 	}
 	path, err := s.path(name)
 	if err != nil {
@@ -165,6 +169,33 @@ func (s FileSchematicStore) Load(name string) (*Clipboard, error) {
 		cb.Entries = append(cb.Entries, e)
 	}
 	return cb, nil
+}
+
+// LoadCompactJavaSchematic imports a Java schematic into a compact
+// palette-backed representation. It returns found=false when name has no
+// .schem/.schematic file, so callers can fall back to Load.
+func (s FileSchematicStore) LoadCompactJavaSchematic(name string) (*CompactSchematic, JavaSchematicReport, bool, error) {
+	if err := validateSchematicName(name); err != nil {
+		return nil, JavaSchematicReport{}, false, err
+	}
+	p, found, err := s.javaSchematicPath(name)
+	if err != nil || !found {
+		return nil, JavaSchematicReport{}, found, err
+	}
+	compact, report, err := ImportJavaCompactSchematic(p)
+	return compact, report, true, err
+}
+
+func (s FileSchematicStore) javaSchematicPath(name string) (string, bool, error) {
+	for _, ext := range javaSchematicExtensions {
+		p := filepath.Join(s.dir(), name+ext)
+		if _, statErr := os.Stat(p); statErr == nil {
+			return p, true, nil
+		} else if !os.IsNotExist(statErr) {
+			return "", false, statErr
+		}
+	}
+	return "", false, nil
 }
 
 // Delete removes a saved schematic file.
