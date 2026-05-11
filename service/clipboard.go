@@ -117,7 +117,10 @@ func Schematic(tx *world.Tx, s Session, origin cube.Pos, dir cube.Direction, sto
 			return SchematicResult{}, err
 		}
 		batch := historyBatch(opts)
-		if err := edit.PasteClipboard(tx, cb, origin, dir, noAir, batch); err != nil {
+		// PasteClipboardConsuming mutates cb in place — safe here because the
+		// clipboard was just loaded from the store solely for this paste and
+		// is dropped on return. Saves a full slice copy on arena-scale schematics.
+		if err := edit.PasteClipboardConsuming(tx, cb, origin, dir, noAir, batch); err != nil {
 			return SchematicResult{}, err
 		}
 		result := finishEdit(s, batch, len(cb.Entries))

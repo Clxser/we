@@ -37,6 +37,21 @@ func (s denseBlockStructure) At(x, y, z int, _ func(x, y, z int) world.Block) (w
 	return entry.Block, entry.Liq
 }
 
+// bufferDenseStructure wraps a pre-XYZ-ordered []bufferEntry slice as a
+// world.Structure for tx.BuildStructure, so the no-batch fast path can
+// stream cells directly without materialising a parallel ~5 GB slice of
+// denseBlockEntry copies on arena-scale clipboards.
+type bufferDenseStructure struct {
+	d       [3]int
+	entries []bufferEntry
+}
+
+func (s bufferDenseStructure) Dimensions() [3]int { return s.d }
+
+func (s bufferDenseStructure) At(x, y, z int, _ func(x, y, z int) world.Block) (world.Block, world.Liquid) {
+	return structureLayers(s.entries[(x*s.d[1]+y)*s.d[2]+z])
+}
+
 type uniformBlockStructure struct {
 	d     [3]int
 	block world.Block
@@ -184,21 +199,12 @@ func writeDenseBufferLayout(tx *world.Tx, origin cube.Pos, layout denseBuffer, b
 func writeDenseBufferLayoutScratch(tx *world.Tx, origin cube.Pos, layout denseBuffer, batch *history.Batch, denseEntries []denseBlockEntry) []denseBlockEntry {
 	n := len(layout.ordered)
 	if batch == nil {
-		tAlloc := startTrace("writeDense.denseEntries_alloc(no_batch)")
-		if cap(denseEntries) < n {
-			denseEntries = make([]denseBlockEntry, n)
-		} else {
-			denseEntries = denseEntries[:n]
-		}
-		tAlloc.end()
-		tFill := startTrace("writeDense.denseEntries_fill(no_batch)")
-		for i, entry := range layout.ordered {
-			block, liq := structureLayers(entry)
-			denseEntries[i] = denseBlockEntry{Pos: origin.Add(entry.Offset), Index: -1, Block: block, Liq: liq}
-		}
-		tFill.end()
+		// Skip the per-cell denseEntries copy entirely: BuildStructure walks
+		// our pre-XYZ-ordered []bufferEntry directly via bufferDenseStructure.
+		// Saves an O(n) ~5 GB allocation on a 90M-cell paste.
+		traceAnnotate("writeDense.no_batch fast path (zero-copy)", "cells", n)
 		tBuild := startTrace("writeDense.tx.BuildStructure(no_batch)")
-		buildStructure(tx, origin.Add(layout.min), denseBlockStructure{d: layout.dims, entries: denseEntries})
+		buildStructure(tx, origin.Add(layout.min), bufferDenseStructure{d: layout.dims, entries: layout.ordered})
 		tBuild.end()
 		return denseEntries
 	}

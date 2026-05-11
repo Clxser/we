@@ -27,7 +27,23 @@ func CopySelection(tx *world.Tx, area geo.Area, origin cube.Pos, dir cube.Direct
 
 // PasteClipboard writes cb at origin, rotating around the Y axis to match dir.
 // Returns an error if the clipboard is empty. When noAir is true, air entries are skipped.
+//
+// PasteClipboard never mutates cb — when rotation is needed it copies the
+// entries first. For arena-scale clipboards where the copy is unaffordable,
+// use PasteClipboardConsuming instead, which rotates cb.Entries in place.
 func PasteClipboard(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.Direction, noAir bool, batch *history.Batch) error {
+	return pasteClipboardImpl(tx, cb, origin, dir, noAir, batch, false)
+}
+
+// PasteClipboardConsuming is the memory-efficient variant of PasteClipboard
+// for callers who own cb and don't need it preserved after the paste. It
+// rotates cb.Entries in place (saving a full slice copy — ~5 GB on a 90M-
+// cell schematic) and updates cb.OriginDir to match dir.
+func PasteClipboardConsuming(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.Direction, noAir bool, batch *history.Batch) error {
+	return pasteClipboardImpl(tx, cb, origin, dir, noAir, batch, true)
+}
+
+func pasteClipboardImpl(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.Direction, noAir bool, batch *history.Batch, consume bool) error {
 	if cb == nil || len(cb.Entries) == 0 {
 		return fmt.Errorf("clipboard is empty")
 	}
@@ -37,25 +53,24 @@ func PasteClipboard(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.Direc
 		"paste_dir", dir.String(),
 		"no_air", noAir,
 		"with_history", batch != nil,
+		"consume", consume,
 	)
 	turns := rotationTurns(cb.OriginDir, dir)
 	entries := cb.Entries
 	if turns != 0 {
-		tRot := startTrace("PasteClipboard.rotation_copy")
-		entries = make([]bufferEntry, len(cb.Entries))
-		copy(entries, cb.Entries)
-		transform := blockTransform{axis: "y", turns: turns}
-		cache := make(blockTransformCache)
-		for i := range entries {
-			entries[i].Offset = rotateOffset(entries[i].Offset, "y", turns)
-			entries[i].Block = cache.transform(entries[i].Block, transform)
-			if entries[i].HasLiq {
-				if b, ok := cache.transform(entries[i].Liquid, transform).(world.Liquid); ok {
-					entries[i].Liquid = b
-				}
-			}
+		if consume {
+			// Mutate cb.Entries in place — no extra allocation.
+			tRot := startTrace("PasteClipboard.rotation_in_place")
+			rotateEntriesInPlace(cb.Entries, turns)
+			cb.OriginDir = dir
+			tRot.end()
+		} else {
+			tRot := startTrace("PasteClipboard.rotation_copy")
+			entries = make([]bufferEntry, len(cb.Entries))
+			copy(entries, cb.Entries)
+			rotateEntriesInPlace(entries, turns)
+			tRot.end()
 		}
-		tRot.end()
 	} else {
 		traceAnnotate("PasteClipboard.rotation_skipped (turns=0)")
 	}
@@ -63,6 +78,20 @@ func PasteClipboard(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.Direc
 	pasteBuffer(tx, origin, entries, noAir, batch)
 	tPaste.end()
 	return nil
+}
+
+func rotateEntriesInPlace(entries []bufferEntry, turns int) {
+	transform := blockTransform{axis: "y", turns: turns}
+	cache := make(blockTransformCache)
+	for i := range entries {
+		entries[i].Offset = rotateOffset(entries[i].Offset, "y", turns)
+		entries[i].Block = cache.transform(entries[i].Block, transform)
+		if entries[i].HasLiq {
+			if b, ok := cache.transform(entries[i].Liquid, transform).(world.Liquid); ok {
+				entries[i].Liquid = b
+			}
+		}
+	}
 }
 
 // PasteSubChunkCount returns how many unique 16x16x16 sub-chunks a paste would

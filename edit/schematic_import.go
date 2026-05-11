@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
@@ -99,12 +100,15 @@ func ImportJavaSchematic(path string) (*Clipboard, JavaSchematicReport, error) {
 	// imports; the data has been copied into cb.Entries.
 	tDrop := startTrace("import.s.Blocks=nil+GC")
 	s.Blocks = nil
-	if PasteTracingEnabled() {
-		// Force a GC so trace measurements after this point reflect the
-		// freed memory rather than waiting for the next periodic sweep.
-		runtime.GC()
-	}
+	runtime.GC()
 	tDrop.end()
+	// Return the freed memory to the OS so subsequent allocations (e.g. the
+	// paste path) don't have to ask the kernel for new pages on top of the
+	// runtime's now-idle heap. Without this, Sys stays near the peak even
+	// after heap drops, and the next big alloc can OOM-kill the process.
+	tFree := startTrace("import.debug.FreeOSMemory")
+	debug.FreeOSMemory()
+	tFree.end()
 
 	return cb, rep, nil
 }
