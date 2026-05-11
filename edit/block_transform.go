@@ -1,9 +1,11 @@
 package edit
 
 import (
+	"math"
 	"reflect"
 	"strings"
 
+	"github.com/Velvet-MC/s2d/translate"
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/we/parse"
@@ -63,7 +65,7 @@ func transformBlock(b world.Block, t blockTransform) world.Block {
 		return out
 	}
 	name, props := b.EncodeBlock()
-	if out, ok := transformBlockProperties(name, props, t); ok {
+	if out, ok := transformBlockProperties(b, name, props, t); ok {
 		return out
 	}
 	return b
@@ -125,7 +127,7 @@ func transformBlockFields(b world.Block, t blockTransform) (world.Block, bool) {
 	return out, ok
 }
 
-func transformBlockProperties(name string, props map[string]any, t blockTransform) (world.Block, bool) {
+func transformBlockProperties(original world.Block, name string, props map[string]any, t blockTransform) (world.Block, bool) {
 	if len(props) == 0 {
 		return nil, false
 	}
@@ -189,6 +191,9 @@ func transformBlockProperties(name string, props map[string]any, t blockTransfor
 	}
 	if !changed {
 		return nil, false
+	}
+	if _, stateHash := original.Hash(); stateHash == math.MaxUint64 {
+		return translate.NewStateBlock(translate.BedrockState{Name: name, Properties: cp}), true
 	}
 	out, ok := world.BlockByName(name, cp)
 	return out, ok

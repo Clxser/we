@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Velvet-MC/s2d/translate"
+	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
 )
 
@@ -18,5 +20,19 @@ func TestRotateBlockDoesNotPanicForRegisteredBlocks(t *testing.T) {
 			}()
 			_ = RotateBlock(b, "y", 3)
 		})
+	}
+}
+
+func TestRotateBlockKeepsInertStateBlocksInert(t *testing.T) {
+	world.DefaultBlockRegistry.Finalize()
+	got := translate.Lookup("minecraft:smoker[facing=north,lit=false]")
+	if !got.Recognized {
+		t.Fatal("smoker was not recognized")
+	}
+	rotated := RotateBlock(got.Block, "y", 1)
+	if _, ticking := rotated.(interface {
+		Tick(int64, cube.Pos, *world.Tx)
+	}); ticking {
+		t.Fatalf("rotated schematic block %T must remain inert", rotated)
 	}
 }
