@@ -3,7 +3,7 @@ module github.com/df-mc/we
 go 1.26.1
 
 require (
-	github.com/Clxser/S2D v0.0.0-00010101000000-000000000000
+	github.com/Velvet-MC/s2d v0.0.0-00010101000000-000000000000
 	github.com/df-mc/dragonfly v0.10.13
 	github.com/go-gl/mathgl v1.2.0
 	github.com/google/uuid v1.6.0
@@ -34,4 +34,4 @@ replace github.com/sandertv/gophertunnel => github.com/Velvet-MC/gophertunnel v0
 
 replace github.com/df-mc/dragonfly => github.com/Velvet-MC/dragonfly v0.0.0-20260510173750-6293b0bcbd64
 
-replace github.com/Clxser/S2D => ../s2d
+replace github.com/Velvet-MC/s2d => ../s2d

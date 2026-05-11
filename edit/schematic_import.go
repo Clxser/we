@@ -8,10 +8,10 @@ import (
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
 
-	_ "github.com/Clxser/S2D/legacy" // register .schematic handler
-	_ "github.com/Clxser/S2D/sponge" // register .schem handler
+	_ "github.com/Velvet-MC/s2d/legacy" // register .schematic handler
+	_ "github.com/Velvet-MC/s2d/sponge" // register .schem handler
 
-	"github.com/Clxser/S2D/schem"
+	"github.com/Velvet-MC/s2d/schem"
 )
 
 // JavaSchematicReport is the per-load summary returned by ImportJavaSchematic.
