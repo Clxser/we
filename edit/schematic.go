@@ -169,7 +169,9 @@ func (s FileSchematicStore) Delete(name string) error {
 	return os.Remove(path)
 }
 
-// List returns saved schematic names in alphabetical order.
+// List returns saved schematic names in alphabetical order. Files of any
+// supported extension (.schem, .schematic, .json) are listed; duplicate
+// base names (same name across multiple extensions) are listed once.
 func (s FileSchematicStore) List() ([]string, error) {
 	entries, err := os.ReadDir(s.dir())
 	if os.IsNotExist(err) {
@@ -178,12 +180,23 @@ func (s FileSchematicStore) List() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	supported := map[string]bool{".schem": true, ".schematic": true, ".json": true}
+	seen := make(map[string]struct{})
 	var names []string
 	for _, e := range entries {
-		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
+		if e.IsDir() {
 			continue
 		}
-		names = append(names, e.Name()[:len(e.Name())-len(".json")])
+		ext := filepath.Ext(e.Name())
+		if !supported[ext] {
+			continue
+		}
+		base := e.Name()[:len(e.Name())-len(ext)]
+		if _, ok := seen[base]; ok {
+			continue
+		}
+		seen[base] = struct{}{}
+		names = append(names, base)
 	}
 	sort.Strings(names)
 	return names, nil
