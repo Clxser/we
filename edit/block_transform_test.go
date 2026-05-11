@@ -93,3 +93,64 @@ func TestRotateBlockTransformsInertBedrockDirectionProperties(t *testing.T) {
 		})
 	}
 }
+
+func TestRotateBlockTransformsInertSignStates(t *testing.T) {
+	world.DefaultBlockRegistry.Finalize()
+	tests := []struct {
+		name      string
+		key       string
+		turns     int
+		wantProps map[string]any
+	}{
+		{
+			name:  "wall_sign",
+			key:   "minecraft:oak_wall_sign[facing=north,waterlogged=false]",
+			turns: 1,
+			wantProps: map[string]any{
+				"facing_direction": int32(5), // north wall sign rotates to east.
+			},
+		},
+		{
+			name:  "standing_sign",
+			key:   "minecraft:oak_sign[rotation=0,waterlogged=false]",
+			turns: 1,
+			wantProps: map[string]any{
+				"ground_sign_direction": int32(4),
+			},
+		},
+		{
+			name:  "wall_hanging_sign",
+			key:   "minecraft:oak_wall_hanging_sign[facing=north,waterlogged=false]",
+			turns: 1,
+			wantProps: map[string]any{
+				"facing_direction": int32(5), // north wall hanging sign rotates to east.
+			},
+		},
+		{
+			name:  "standing_hanging_sign",
+			key:   "minecraft:oak_hanging_sign[attached=false,rotation=0,waterlogged=false]",
+			turns: 1,
+			wantProps: map[string]any{
+				"ground_sign_direction": int32(4),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := translate.Lookup(tt.key)
+			if !res.Recognized {
+				t.Fatalf("%s not recognized", tt.key)
+			}
+			rotated := RotateBlock(res.Block, "y", tt.turns)
+			_, props := rotated.EncodeBlock()
+			for key, want := range tt.wantProps {
+				if got := props[key]; got != want {
+					t.Fatalf("%s property %s = %#v (%T), want %#v (%T)", tt.key, key, got, got, want, want)
+				}
+			}
+			if _, stateHash := rotated.Hash(); stateHash != math.MaxUint64 {
+				t.Fatalf("rotated schematic sign should stay inert StateBlock, state hash = %d", stateHash)
+			}
+		})
+	}
+}

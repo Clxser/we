@@ -150,7 +150,13 @@ func transformBlockProperties(original world.Block, name string, props map[strin
 		}
 	}
 	if v, ok := cp["facing_direction"]; ok {
-		if face, ok := intFace(v); ok {
+		if d, ok := intWallFacingDirection(v); ok && isWallMountedState(name) {
+			next := transformDirection(d, t)
+			if next != d {
+				cp["facing_direction"] = wallFacingDirectionInt(next)
+				changed = true
+			}
+		} else if face, ok := intFace(v); ok {
 			next := transformFace(face, t)
 			if next != face {
 				cp["facing_direction"] = int32(next)
@@ -429,6 +435,48 @@ func intValue(v any) (int, bool) {
 func isTrapdoorState(name string) bool {
 	name = strings.TrimPrefix(name, "minecraft:")
 	return name == "trapdoor" || strings.HasSuffix(name, "_trapdoor")
+}
+
+func isWallMountedState(name string) bool {
+	name = strings.TrimPrefix(name, "minecraft:")
+	return name == "wall_sign" || name == "wall_banner" ||
+		strings.HasSuffix(name, "_wall_sign") || strings.HasSuffix(name, "_wall_banner") ||
+		strings.HasSuffix(name, "_wall_skull") || strings.HasSuffix(name, "_wall_head") ||
+		strings.HasSuffix(name, "_hanging_sign")
+}
+
+func intWallFacingDirection(v any) (cube.Direction, bool) {
+	n, ok := intValue(v)
+	if !ok {
+		return cube.North, false
+	}
+	switch n {
+	case 2:
+		return cube.North, true
+	case 3:
+		return cube.South, true
+	case 4:
+		return cube.West, true
+	case 5:
+		return cube.East, true
+	default:
+		return cube.North, false
+	}
+}
+
+func wallFacingDirectionInt(d cube.Direction) int32 {
+	switch d {
+	case cube.North:
+		return 2
+	case cube.South:
+		return 3
+	case cube.West:
+		return 4
+	case cube.East:
+		return 5
+	default:
+		return 2
+	}
 }
 
 func intStairsDirection(v any) (cube.Direction, bool) {
