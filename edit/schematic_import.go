@@ -38,11 +38,12 @@ type JavaSchematicReport struct {
 // via s2d/translate.SetMissingBlock (default magenta wool) and tallied in
 // the returned JavaSchematicReport.
 //
-// The clipboard's Entries slice is laid out in XYZ index order
-// ((x*height+y)*length+z) so the downstream paste fast-path
-// (edit.makeDenseBuffer) recognises it as already-ordered and skips a
-// redundant ~per-cell reorder allocation. For arena-scale schematics
-// (10M+ cells) this saves several GB of transient memory.
+// The clipboard's Entries slice is filled directly from s2d's streaming scan
+// and laid out in XYZ index order ((x*height+y)*length+z), so the downstream
+// paste fast-path (edit.makeDenseBuffer) recognises it as already-ordered and
+// skips a redundant ~per-cell reorder allocation. For arena-scale schematics
+// (10M+ cells), streaming also avoids materialising s2d's per-cell
+// Schematic.Blocks slice before copying into the clipboard.
 func ImportJavaSchematic(path string) (*Clipboard, JavaSchematicReport, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -50,30 +51,20 @@ func ImportJavaSchematic(path string) (*Clipboard, JavaSchematicReport, error) {
 	}
 	defer func() { _ = f.Close() }()
 
-	tRead := startTrace("import.schem.Read")
-	s, err := schem.Read(filepath.Base(path), f)
-	tRead.end()
-	if err != nil {
-		return nil, JavaSchematicReport{}, fmt.Errorf("import %s: %w", filepath.Base(path), err)
-	}
-	traceAnnotate("import.schem.Read result",
-		"width", s.Width, "height", s.Height, "length", s.Length,
-		"cells", len(s.Blocks),
-		"unknown_kinds", len(s.Unknowns.Counts),
-		"unknown_cells", s.Unknowns.Total,
-	)
-
-	tAlloc := startTrace("import.cb.Entries.make")
-	h, l := s.Height, s.Length
-	cb := &Clipboard{
-		OriginDir: cube.North,
-		Entries:   make([]bufferEntry, len(s.Blocks)),
-	}
-	tAlloc.end()
-
-	tFill := startTrace("import.cb.Entries.fill")
-	for i := range s.Blocks {
-		b := &s.Blocks[i]
+	var cb *Clipboard
+	var h, l int
+	tRead := startTrace("import.schem.Scan")
+	info, err := schem.ScanWithInfo(filepath.Base(path), f, func(info schem.ScanInfo) error {
+		h, l = info.Height, info.Length
+		cb = &Clipboard{
+			OriginDir: cube.North,
+			Entries:   make([]bufferEntry, info.Width*info.Height*info.Length),
+		}
+		return nil
+	}, func(b schem.Block) error {
+		if cb == nil {
+			return fmt.Errorf("schematic metadata was not read before block data")
+		}
 		idx := (b.Pos[0]*h+b.Pos[1])*l + b.Pos[2]
 		e := &cb.Entries[idx]
 		e.Offset = cube.Pos{b.Pos[0], b.Pos[1], b.Pos[2]}
@@ -82,27 +73,34 @@ func ImportJavaSchematic(path string) (*Clipboard, JavaSchematicReport, error) {
 			e.Liquid = b.Liquid
 			e.HasLiq = true
 		}
+		return nil
+	})
+	tRead.end()
+	if err != nil {
+		return nil, JavaSchematicReport{}, fmt.Errorf("import %s: %w", filepath.Base(path), err)
 	}
-	tFill.end()
+	traceAnnotate("import.schem.Scan result",
+		"width", info.Width, "height", info.Height, "length", info.Length,
+		"cells", len(cb.Entries),
+		"unknown_kinds", len(info.Unknowns.Counts),
+		"unknown_cells", info.Unknowns.Total,
+	)
 
 	rep := JavaSchematicReport{
-		Format: string(s.Format),
-		Counts: s.Unknowns.Counts,
-		Total:  s.Unknowns.Total,
-		Width:  s.Width,
-		Height: s.Height,
-		Length: s.Length,
+		Format: string(info.Format),
+		Counts: info.Unknowns.Counts,
+		Total:  info.Unknowns.Total,
+		Width:  info.Width,
+		Height: info.Height,
+		Length: info.Length,
 	}
-	// Drop the s.Blocks reference so the GC can reclaim ~5 GB on arena-scale
-	// imports; the data has been copied into cb.Entries.
-	tDrop := startTrace("import.s.Blocks=nil+GC")
-	s.Blocks = nil
+	// Drop transient NBT decode buffers before paste starts.
+	tDrop := startTrace("import.scan.GC")
 	runtime.GC()
 	tDrop.end()
-	// Return the freed memory to the OS so subsequent allocations (e.g. the
+	// Return freed decode memory to the OS so subsequent allocations (e.g. the
 	// paste path) don't have to ask the kernel for new pages on top of the
-	// runtime's now-idle heap. Without this, Sys stays near the peak even
-	// after heap drops, and the next big alloc can OOM-kill the process.
+	// runtime's now-idle heap.
 	tFree := startTrace("import.debug.FreeOSMemory")
 	debug.FreeOSMemory()
 	tFree.end()
