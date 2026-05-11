@@ -2,6 +2,7 @@ package edit
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/Velvet-MC/s2d/translate"
@@ -34,5 +35,61 @@ func TestRotateBlockKeepsInertStateBlocksInert(t *testing.T) {
 		Tick(int64, cube.Pos, *world.Tx)
 	}); ticking {
 		t.Fatalf("rotated schematic block %T must remain inert", rotated)
+	}
+}
+
+func TestRotateBlockTransformsInertBedrockDirectionProperties(t *testing.T) {
+	world.DefaultBlockRegistry.Finalize()
+	tests := []struct {
+		name  string
+		key   string
+		turns int
+		prop  string
+		want  any
+	}{
+		{
+			name:  "stairs_weirdo_direction",
+			key:   "minecraft:sandstone_stairs[facing=north,half=bottom,shape=straight,waterlogged=false]",
+			turns: 1,
+			prop:  "weirdo_direction",
+			want:  int32(0), // north -> east in Bedrock stairs encoding.
+		},
+		{
+			name:  "trapdoor_direction",
+			key:   "minecraft:oak_trapdoor[facing=north,half=bottom,open=false,powered=false,waterlogged=false]",
+			turns: 1,
+			prop:  "direction",
+			want:  int32(0), // north -> east in Bedrock trapdoor encoding.
+		},
+		{
+			name:  "portal_axis",
+			key:   "minecraft:nether_portal[axis=x]",
+			turns: 1,
+			prop:  "portal_axis",
+			want:  "z",
+		},
+		{
+			name:  "wall_connections",
+			key:   "minecraft:cobblestone_wall[east=none,north=tall,south=none,up=true,waterlogged=false,west=low]",
+			turns: 1,
+			prop:  "wall_connection_type_east",
+			want:  "tall", // north connection rotates to east.
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := translate.Lookup(tt.key)
+			if !res.Recognized {
+				t.Fatalf("%s not recognized", tt.key)
+			}
+			rotated := RotateBlock(res.Block, "y", tt.turns)
+			_, props := rotated.EncodeBlock()
+			if got := props[tt.prop]; got != tt.want {
+				t.Fatalf("%s property %s = %#v (%T), want %#v (%T)", tt.key, tt.prop, got, got, tt.want, tt.want)
+			}
+			if _, stateHash := rotated.Hash(); stateHash != math.MaxUint64 {
+				t.Fatalf("rotated schematic block should stay inert StateBlock, state hash = %d", stateHash)
+			}
+		})
 	}
 }

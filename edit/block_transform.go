@@ -158,6 +158,24 @@ func transformBlockProperties(original world.Block, name string, props map[strin
 			}
 		}
 	}
+	if v, ok := cp["weirdo_direction"]; ok {
+		if d, ok := intStairsDirection(v); ok {
+			next := transformDirection(d, t)
+			if next != d {
+				cp["weirdo_direction"] = stairsDirectionInt(next)
+				changed = true
+			}
+		}
+	}
+	if v, ok := cp["direction"]; ok && isTrapdoorState(name) {
+		if d, ok := intTrapdoorDirection(v); ok {
+			next := transformDirection(d, t)
+			if next != d {
+				cp["direction"] = trapdoorDirectionInt(next)
+				changed = true
+			}
+		}
+	}
 	if v, ok := cp["ground_sign_direction"]; ok && t.axis == "y" {
 		if o, ok := intValue(v); ok {
 			next := transformOrientation(o, t)
@@ -178,6 +196,17 @@ func transformBlockProperties(original world.Block, name string, props map[strin
 			}
 		}
 	}
+	if v, ok := cp["portal_axis"]; ok {
+		if s, ok := v.(string); ok {
+			if a, ok := axisFromString(s); ok {
+				next := transformAxis(a, t)
+				if next != a {
+					cp["portal_axis"] = next.String()
+					changed = true
+				}
+			}
+		}
+	}
 	if v, ok := cp["torch_facing_direction"]; ok {
 		if s, ok := v.(string); ok {
 			if face, ok := torchFaceFromString(s); ok {
@@ -188,6 +217,9 @@ func transformBlockProperties(original world.Block, name string, props map[strin
 				}
 			}
 		}
+	}
+	if transformWallConnections(cp, t) {
+		changed = true
 	}
 	if !changed {
 		return nil, false
@@ -391,6 +423,104 @@ func intValue(v any) (int, bool) {
 		return int(n), n == float64(int(n))
 	default:
 		return 0, false
+	}
+}
+
+func isTrapdoorState(name string) bool {
+	name = strings.TrimPrefix(name, "minecraft:")
+	return name == "trapdoor" || strings.HasSuffix(name, "_trapdoor")
+}
+
+func intStairsDirection(v any) (cube.Direction, bool) {
+	n, ok := intValue(v)
+	if !ok {
+		return cube.North, false
+	}
+	switch n {
+	case 0:
+		return cube.East, true
+	case 1:
+		return cube.West, true
+	case 2:
+		return cube.South, true
+	case 3:
+		return cube.North, true
+	default:
+		return cube.North, false
+	}
+}
+
+func stairsDirectionInt(d cube.Direction) int32 {
+	switch d {
+	case cube.East:
+		return 0
+	case cube.West:
+		return 1
+	case cube.South:
+		return 2
+	case cube.North:
+		return 3
+	default:
+		return 3
+	}
+}
+
+func intTrapdoorDirection(v any) (cube.Direction, bool) {
+	return intStairsDirection(v)
+}
+
+func trapdoorDirectionInt(d cube.Direction) int32 {
+	return stairsDirectionInt(d)
+}
+
+func transformWallConnections(props map[string]any, t blockTransform) bool {
+	keys := map[string]cube.Direction{
+		"wall_connection_type_north": cube.North,
+		"wall_connection_type_east":  cube.East,
+		"wall_connection_type_south": cube.South,
+		"wall_connection_type_west":  cube.West,
+	}
+	values := make(map[cube.Direction]any, len(keys))
+	seen := false
+	for key, dir := range keys {
+		if v, ok := props[key]; ok {
+			values[dir] = v
+			seen = true
+		}
+	}
+	if !seen {
+		return false
+	}
+	for key := range keys {
+		props[key] = "none"
+	}
+	changed := false
+	for from, value := range values {
+		to := transformDirection(from, t)
+		key := wallConnectionKey(to)
+		if key == "" {
+			continue
+		}
+		if props[key] != value {
+			changed = true
+		}
+		props[key] = value
+	}
+	return changed
+}
+
+func wallConnectionKey(d cube.Direction) string {
+	switch d {
+	case cube.North:
+		return "wall_connection_type_north"
+	case cube.East:
+		return "wall_connection_type_east"
+	case cube.South:
+		return "wall_connection_type_south"
+	case cube.West:
+		return "wall_connection_type_west"
+	default:
+		return ""
 	}
 }
 
