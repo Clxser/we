@@ -118,14 +118,28 @@ func ImportJavaCompactSchematic(path string) (*CompactSchematic, JavaSchematicRe
 	defer func() { _ = f.Close() }()
 
 	var compact *CompactSchematic
+	var sourcePalette []uint32
+	var sourcePaletteSeen []bool
 	tRead := startTrace("import.compact.schem.Scan")
 	info, err := schem.ScanWithInfo(filepath.Base(path), f, func(info schem.ScanInfo) error {
 		var err error
 		compact, err = NewCompactSchematic(info.Width, info.Height, info.Length)
+		if info.PaletteSize > 0 {
+			sourcePalette = make([]uint32, info.PaletteSize)
+			sourcePaletteSeen = make([]bool, info.PaletteSize)
+		}
 		return err
 	}, func(b schem.Block) error {
 		if compact == nil {
 			return fmt.Errorf("schematic metadata was not read before block data")
+		}
+		if sourceIndex := int(b.PaletteIndex); b.PaletteIndexOK && sourceIndex < len(sourcePalette) {
+			if !sourcePaletteSeen[sourceIndex] {
+				sourcePalette[sourceIndex] = compact.AppendPaletteState(b.Block, b.Liquid)
+				sourcePaletteSeen[sourceIndex] = true
+			}
+			compact.setPaletteIndexXYZ(b.Pos[0], b.Pos[1], b.Pos[2], sourcePalette[sourceIndex])
+			return nil
 		}
 		return compact.AddBlock(cube.Pos{b.Pos[0], b.Pos[1], b.Pos[2]}, b.Block, b.Liquid)
 	})

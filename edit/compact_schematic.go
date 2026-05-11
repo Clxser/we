@@ -65,6 +65,46 @@ func (s *CompactSchematic) AddBlock(pos cube.Pos, block world.Block, liquid worl
 	return nil
 }
 
+// AppendPaletteState appends block/liquid as a palette entry without
+// deduplicating it. This is used when the source format already has a palette
+// and callers can map source palette indexes once.
+func (s *CompactSchematic) AppendPaletteState(block world.Block, liquid world.Liquid) uint32 {
+	state := compactBlockState{Block: block}
+	if liquid != nil {
+		state.Liquid = liquid
+		state.HasLiq = true
+	}
+	i := uint32(len(s.palette))
+	s.palette = append(s.palette, state)
+	if i > uint32(^uint16(0)) && s.wide == nil {
+		s.wide = make([]uint32, len(s.small))
+		for n, v := range s.small {
+			s.wide[n] = uint32(v)
+		}
+		s.small = nil
+	}
+	return i
+}
+
+// SetPaletteIndex stores a previously appended palette index at pos.
+func (s *CompactSchematic) SetPaletteIndex(pos cube.Pos, paletteIndex uint32) error {
+	if s == nil {
+		return fmt.Errorf("compact schematic is nil")
+	}
+	if pos[0] < 0 || pos[0] >= s.dims[0] || pos[1] < 0 || pos[1] >= s.dims[1] || pos[2] < 0 || pos[2] >= s.dims[2] {
+		return fmt.Errorf("compact schematic position %v out of bounds", pos)
+	}
+	if int(paletteIndex) >= len(s.palette) {
+		return fmt.Errorf("compact schematic palette index %d out of range", paletteIndex)
+	}
+	s.setPaletteIndexXYZ(pos[0], pos[1], pos[2], paletteIndex)
+	return nil
+}
+
+func (s *CompactSchematic) setPaletteIndexXYZ(x, y, z int, paletteIndex uint32) {
+	s.setIndex((x*s.dims[1]+y)*s.dims[2]+z, paletteIndex)
+}
+
 // Volume returns the number of cells in the compact schematic.
 func (s *CompactSchematic) Volume() int {
 	if s == nil {

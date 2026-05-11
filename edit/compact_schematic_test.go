@@ -44,6 +44,39 @@ func TestCompactSchematicDeduplicatesPaletteAndPastes(t *testing.T) {
 	})
 }
 
+func TestCompactSchematicDirectPaletteIndexes(t *testing.T) {
+	cs, err := NewCompactSchematic(2, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stone := cs.AppendPaletteState(mcblock.Stone{}, nil)
+	dirt := cs.AppendPaletteState(mcblock.Dirt{}, nil)
+	if stone != 0 || dirt != 1 {
+		t.Fatalf("palette indexes = %d/%d, want 0/1", stone, dirt)
+	}
+	if err := cs.SetPaletteIndex(cube.Pos{0, 0, 0}, stone); err != nil {
+		t.Fatal(err)
+	}
+	if err := cs.SetPaletteIndex(cube.Pos{1, 0, 0}, dirt); err != nil {
+		t.Fatal(err)
+	}
+
+	if cs.PaletteLen() != 2 {
+		t.Fatalf("palette len = %d, want 2", cs.PaletteLen())
+	}
+	withCompactTx(t, func(tx *world.Tx) {
+		if err := PasteCompactSchematicNoUndo(tx, cs, cube.Pos{}, cube.North); err != nil {
+			t.Fatal(err)
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{0, 0, 0}), mcblock.Stone{}) {
+			t.Fatalf("first block = %T, want stone", tx.Block(cube.Pos{0, 0, 0}))
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{1, 0, 0}), mcblock.Dirt{}) {
+			t.Fatalf("second block = %T, want dirt", tx.Block(cube.Pos{1, 0, 0}))
+		}
+	})
+}
+
 func TestCompactSchematicRotatesPasteAndDirectionalBlocks(t *testing.T) {
 	cs, err := NewCompactSchematic(1, 1, 2)
 	if err != nil {
