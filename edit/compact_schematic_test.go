@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Velvet-MC/s2d/translate"
 	mcblock "github.com/df-mc/dragonfly/server/block"
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
@@ -99,6 +100,36 @@ func TestCompactSchematicRotatesPasteAndDirectionalBlocks(t *testing.T) {
 		}
 		if !parse.SameBlock(tx.Block(cube.Pos{19, 0, 20}), mcblock.Dirt{}) {
 			t.Fatalf("rotated dirt missed expected position, got %T", tx.Block(cube.Pos{19, 0, 20}))
+		}
+	})
+}
+
+func TestCompactSchematicPastesLiquidLayerOnNonLiquidBlock(t *testing.T) {
+	cs, err := NewCompactSchematic(1, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seagrass := translate.NewStateBlock(translate.BedrockState{
+		Name:       "minecraft:seagrass",
+		Properties: map[string]any{"sea_grass_type": "default"},
+	})
+	water := mcblock.Water{Depth: 8, Still: true}
+	if err := cs.AddBlock(cube.Pos{}, seagrass, water); err != nil {
+		t.Fatal(err)
+	}
+
+	withCompactTx(t, func(tx *world.Tx) {
+		pos := cube.Pos{5, 0, 5}
+		if err := PasteCompactSchematicNoUndo(tx, cs, pos, cube.North); err != nil {
+			t.Fatalf("PasteCompactSchematicNoUndo: %v", err)
+		}
+		name, _ := tx.Block(pos).EncodeBlock()
+		if name != "minecraft:seagrass" {
+			t.Fatalf("block at %v = %s, want minecraft:seagrass", pos, name)
+		}
+		liq, ok := tx.Liquid(pos)
+		if !parse.SameLiquid(liq, ok, water, true) {
+			t.Fatalf("liquid at %v = %T/%v, want water", pos, liq, ok)
 		}
 	})
 }
