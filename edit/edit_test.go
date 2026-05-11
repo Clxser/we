@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
-	_ "unsafe"
 
 	mcblock "github.com/df-mc/dragonfly/server/block"
 	"github.com/df-mc/dragonfly/server/block/cube"
@@ -18,12 +17,8 @@ import (
 	"github.com/df-mc/we/parse"
 )
 
-//go:linkname finaliseBlockRegistry github.com/df-mc/dragonfly/server/world.finaliseBlockRegistry
-func finaliseBlockRegistry()
-
 func withTx(t *testing.T, f func(tx *world.Tx)) {
 	t.Helper()
-	finaliseBlockRegistry()
 	w := world.New()
 	defer func() {
 		if err := w.Close(); err != nil {
@@ -473,15 +468,30 @@ func TestFileSchematicStoreListAndDelete(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(store.Dir, "notes.txt"), []byte("ignore"), 0o644); err != nil {
 		t.Fatalf("write non-schematic file: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(store.Dir, "java.schem"), []byte("schem"), 0o644); err != nil {
+		t.Fatalf("write java schematic file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(store.Dir, "alpha.schematic"), []byte("legacy"), 0o644); err != nil {
+		t.Fatalf("write duplicate legacy schematic file: %v", err)
+	}
 	names, err := store.List()
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if !reflect.DeepEqual(names, []string{"alpha", "beta"}) {
-		t.Fatalf("names = %v, want [alpha beta]", names)
+	if !reflect.DeepEqual(names, []string{"alpha", "beta", "java"}) {
+		t.Fatalf("names = %v, want [alpha beta java]", names)
 	}
 	if err := store.Delete("alpha"); err != nil {
 		t.Fatalf("Delete: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(store.Dir, "alpha.schematic")); !os.IsNotExist(err) {
+		t.Fatalf("Delete alpha left duplicate .schematic file: %v", err)
+	}
+	if err := store.Delete("java"); err != nil {
+		t.Fatalf("Delete java .schem: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(store.Dir, "java.schem")); !os.IsNotExist(err) {
+		t.Fatalf("Delete java left .schem file: %v", err)
 	}
 	names, err = store.List()
 	if err != nil {

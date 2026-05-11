@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	_ "unsafe"
 
 	mcblock "github.com/df-mc/dragonfly/server/block"
 	"github.com/df-mc/dragonfly/server/block/cube"
@@ -18,9 +17,6 @@ import (
 	"github.com/df-mc/we/parse"
 	"github.com/df-mc/we/service"
 )
-
-//go:linkname finaliseBlockRegistry github.com/df-mc/dragonfly/server/world.finaliseBlockRegistry
-func finaliseBlockRegistry()
 
 type fakeSession struct {
 	area       geo.Area
@@ -55,7 +51,6 @@ func (s *fakeSession) Redo(tx *world.Tx, brush bool) bool { return s.history.Red
 
 func withTx(t *testing.T, f func(tx *world.Tx)) {
 	t.Helper()
-	finaliseBlockRegistry()
 	w := world.New()
 	defer func() {
 		if err := w.Close(); err != nil {

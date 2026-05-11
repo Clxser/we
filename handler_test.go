@@ -2,16 +2,12 @@ package we
 
 import (
 	"testing"
-	_ "unsafe"
 
 	mcblock "github.com/df-mc/dragonfly/server/block"
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
 )
-
-//go:linkname finaliseBlockRegistry github.com/df-mc/dragonfly/server/world.finaliseBlockRegistry
-func finaliseBlockRegistry()
 
 func TestTraceBrushBlockSkipsNearStartCollision(t *testing.T) {
 	withWorldTx(t, func(tx *world.Tx) {
@@ -51,7 +47,6 @@ func TestTraceBrushBlockHitsDistantBlockPastClientReach(t *testing.T) {
 
 func withWorldTx(t *testing.T, f func(tx *world.Tx)) {
 	t.Helper()
-	finaliseBlockRegistry()
 	w := world.New()
 	defer func() {
 		if err := w.Close(); err != nil {

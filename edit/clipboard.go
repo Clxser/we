@@ -74,6 +74,13 @@ func pasteClipboardImpl(tx *world.Tx, cb *Clipboard, origin cube.Pos, dir cube.D
 	} else {
 		traceAnnotate("PasteClipboard.rotation_skipped (turns=0)")
 	}
+	if consume && !noAir {
+		tOrder := startTrace("PasteClipboard.order_dense_in_place")
+		if !orderDenseEntriesInPlace(entries) {
+			traceAnnotate("PasteClipboard.order_dense_in_place skipped (entries not dense)")
+		}
+		tOrder.end()
+	}
 	tPaste := startTrace("PasteClipboard.pasteBuffer")
 	pasteBuffer(tx, origin, entries, noAir, batch)
 	tPaste.end()

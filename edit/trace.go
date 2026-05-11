@@ -71,14 +71,6 @@ func (t traceStep) end() {
 	)
 }
 
-func (t traceStep) endf(suffix string) {
-	if t.name == "" {
-		return
-	}
-	t.name = t.name + " " + suffix
-	t.end()
-}
-
 func deltaMB(before, after uint64) int64 {
 	d := int64(after) - int64(before)
 	return d / 1024 / 1024

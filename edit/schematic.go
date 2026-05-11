@@ -56,6 +56,11 @@ type schematicEntry struct {
 
 var schematicNameRE = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
+var (
+	javaSchematicExtensions = []string{".schem", ".schematic"}
+	schematicExtensions     = []string{".schem", ".schematic", ".json"}
+)
+
 func validateSchematicName(name string) error {
 	if !schematicNameRE.MatchString(name) {
 		return fmt.Errorf("invalid schematic name %q", name)
@@ -117,11 +122,13 @@ func (s FileSchematicStore) Load(name string) (*Clipboard, error) {
 	if err := validateSchematicName(name); err != nil {
 		return nil, err
 	}
-	for _, ext := range []string{".schem", ".schematic"} {
+	for _, ext := range javaSchematicExtensions {
 		p := filepath.Join(s.dir(), name+ext)
 		if _, statErr := os.Stat(p); statErr == nil {
 			cb, _, err := ImportJavaSchematic(p)
 			return cb, err
+		} else if !os.IsNotExist(statErr) {
+			return nil, statErr
 		}
 	}
 	path, err := s.path(name)
@@ -162,11 +169,22 @@ func (s FileSchematicStore) Load(name string) (*Clipboard, error) {
 
 // Delete removes a saved schematic file.
 func (s FileSchematicStore) Delete(name string) error {
-	path, err := s.path(name)
-	if err != nil {
+	if err := validateSchematicName(name); err != nil {
 		return err
 	}
-	return os.Remove(path)
+	removed := false
+	for _, ext := range schematicExtensions {
+		path := filepath.Join(s.dir(), name+ext)
+		if err := os.Remove(path); err == nil {
+			removed = true
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+	}
+	if !removed {
+		return fmt.Errorf("schematic %q: %w", name, os.ErrNotExist)
+	}
+	return nil
 }
 
 // List returns saved schematic names in alphabetical order. Files of any
@@ -180,7 +198,10 @@ func (s FileSchematicStore) List() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	supported := map[string]bool{".schem": true, ".schematic": true, ".json": true}
+	supported := make(map[string]bool, len(schematicExtensions))
+	for _, ext := range schematicExtensions {
+		supported[ext] = true
+	}
 	seen := make(map[string]struct{})
 	var names []string
 	for _, e := range entries {

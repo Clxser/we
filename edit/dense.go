@@ -289,6 +289,49 @@ func makeDenseBuffer(entries []bufferEntry) (denseBuffer, bool) {
 	return denseBuffer{min: lo, dims: dims, ordered: ordered}, true
 }
 
+func orderDenseEntriesInPlace(entries []bufferEntry) bool {
+	if len(entries) == 0 {
+		return false
+	}
+	lo, hi := entries[0].Offset, entries[0].Offset
+	for _, entry := range entries[1:] {
+		lo = cube.Pos{min(lo[0], entry.Offset[0]), min(lo[1], entry.Offset[1]), min(lo[2], entry.Offset[2])}
+		hi = cube.Pos{max(hi[0], entry.Offset[0]), max(hi[1], entry.Offset[1]), max(hi[2], entry.Offset[2])}
+	}
+	dims := [3]int{hi[0] - lo[0] + 1, hi[1] - lo[1] + 1, hi[2] - lo[2] + 1}
+	volume := dims[0] * dims[1] * dims[2]
+	if volume != len(entries) {
+		return false
+	}
+
+	targets := make([]int, len(entries))
+	seen := make([]bool, len(entries))
+	inOrder := true
+	for i, entry := range entries {
+		target := denseIndex(entry.Offset, lo, dims)
+		if seen[target] {
+			return false
+		}
+		seen[target] = true
+		targets[i] = target
+		if target != i {
+			inOrder = false
+		}
+	}
+	if inOrder {
+		return true
+	}
+
+	for i := range entries {
+		for targets[i] != i {
+			j := targets[i]
+			entries[i], entries[j] = entries[j], entries[i]
+			targets[i], targets[j] = targets[j], targets[i]
+		}
+	}
+	return true
+}
+
 func denseIndex(pos, min cube.Pos, dims [3]int) int {
 	x, y, z := pos[0]-min[0], pos[1]-min[1], pos[2]-min[2]
 	return (x*dims[1]+y)*dims[2] + z

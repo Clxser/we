@@ -8,7 +8,6 @@ import (
 	"runtime/debug"
 
 	"github.com/df-mc/dragonfly/server/block/cube"
-	"github.com/df-mc/dragonfly/server/world"
 
 	_ "github.com/Velvet-MC/s2d/legacy" // register .schematic handler
 	_ "github.com/Velvet-MC/s2d/sponge" // register .schem handler
@@ -49,7 +48,7 @@ func ImportJavaSchematic(path string) (*Clipboard, JavaSchematicReport, error) {
 	if err != nil {
 		return nil, JavaSchematicReport{}, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	tRead := startTrace("import.schem.Read")
 	s, err := schem.Read(filepath.Base(path), f)
@@ -80,10 +79,8 @@ func ImportJavaSchematic(path string) (*Clipboard, JavaSchematicReport, error) {
 		e.Offset = cube.Pos{b.Pos[0], b.Pos[1], b.Pos[2]}
 		e.Block = b.Block
 		if b.Liquid != nil {
-			if liq, ok := b.Liquid.(world.Liquid); ok {
-				e.Liquid = liq
-				e.HasLiq = true
-			}
+			e.Liquid = b.Liquid
+			e.HasLiq = true
 		}
 	}
 	tFill.end()

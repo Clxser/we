@@ -14,7 +14,6 @@ import (
 
 func newBenchWorld(b *testing.B) *world.World {
 	b.Helper()
-	finaliseBlockRegistry()
 	w := world.New()
 	b.Cleanup(func() {
 		if err := w.Close(); err != nil {
