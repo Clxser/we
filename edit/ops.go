@@ -1,6 +1,7 @@
 package edit
 
 import (
+	"maps"
 	"math"
 	"math/rand"
 	"strings"
@@ -23,6 +24,7 @@ type BlockMask struct {
 	Blocks     []world.Block
 
 	keys      map[parse.BlockKey]struct{}
+	names     map[string]struct{}
 	airListed bool
 }
 
@@ -46,11 +48,23 @@ func (m BlockMask) Match(b world.Block) bool {
 		return false
 	}
 	if m.keys != nil {
-		_, ok := m.keys[parse.BlockKeyOf(b)]
-		return ok
+		if _, ok := m.keys[parse.BlockKeyOf(b)]; ok {
+			return true
+		}
+		if m.names != nil {
+			name, _ := b.EncodeBlock()
+			_, ok := m.names[name]
+			return ok
+		}
+		return false
 	}
 	for _, want := range m.Blocks {
 		if parse.SameBlock(b, want) {
+			return true
+		}
+		wantName, _ := want.EncodeBlock()
+		gotName, _ := b.EncodeBlock()
+		if wantName == gotName {
 			return true
 		}
 	}
@@ -64,11 +78,14 @@ func (m BlockMask) Prepared() BlockMask {
 		return m
 	}
 	m.keys = make(map[parse.BlockKey]struct{}, len(m.Blocks))
+	m.names = make(map[string]struct{}, len(m.Blocks))
 	for _, b := range m.Blocks {
 		if parse.IsAir(b) {
 			m.airListed = true
 		}
 		m.keys[parse.BlockKeyOf(b)] = struct{}{}
+		name, _ := b.EncodeBlock()
+		m.names[name] = struct{}{}
 	}
 	return m
 }
@@ -152,8 +169,9 @@ func ReplaceArea(tx *world.Tx, area geo.Area, mask BlockMask, to []world.Block, 
 	changed := 0
 	area.Range(func(x, y, z int) {
 		pos := cube.Pos{x, y, z}
-		if mask.Match(tx.Block(pos)) {
-			setBlockOrBatch(tx, batch, pos, ChooseBlock(to, nil))
+		block := tx.Block(pos)
+		if mask.Match(block) {
+			setBlockOrBatch(tx, batch, pos, replacementBlock(block, ChooseBlock(to, nil)))
 			changed++
 		}
 	})
@@ -175,12 +193,39 @@ func ReplaceNear(tx *world.Tx, center cube.Pos, radius int, mask BlockMask, to [
 			return
 		}
 		pos := cube.Pos{x, y, z}
-		if mask.Match(tx.Block(pos)) {
-			setBlockOrBatch(tx, batch, pos, ChooseBlock(to, nil))
+		block := tx.Block(pos)
+		if mask.Match(block) {
+			setBlockOrBatch(tx, batch, pos, replacementBlock(block, ChooseBlock(to, nil)))
 			changed++
 		}
 	})
 	return changed
+}
+
+func replacementBlock(source, target world.Block) world.Block {
+	if source == nil || target == nil {
+		return target
+	}
+	sourceName, sourceProps := source.EncodeBlock()
+	targetName, targetProps := target.EncodeBlock()
+	if sourceName == targetName || len(sourceProps) == 0 || len(targetProps) == 0 {
+		return target
+	}
+	merged := maps.Clone(targetProps)
+	changed := false
+	for key := range merged {
+		if value, ok := sourceProps[key]; ok {
+			merged[key] = value
+			changed = true
+		}
+	}
+	if !changed {
+		return target
+	}
+	if block, ok := world.BlockByName(targetName, merged); ok {
+		return block
+	}
+	return target
 }
 
 // TopLayer replaces only the topmost matching block in each (x, z) column of area.

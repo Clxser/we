@@ -9,6 +9,7 @@ import (
 
 	mcblock "github.com/df-mc/dragonfly/server/block"
 	"github.com/df-mc/dragonfly/server/block/cube"
+	"github.com/df-mc/dragonfly/server/item"
 	"github.com/df-mc/dragonfly/server/world"
 	_ "github.com/df-mc/dragonfly/server/world/biome"
 	"github.com/df-mc/we/edit"
@@ -441,6 +442,64 @@ func TestReplaceEverythingMaskIncludesAir(t *testing.T) {
 		if !parse.SameBlock(tx.Block(cube.Pos{1, 0, 0}), mcblock.Stone{}) {
 			t.Fatal("everything mask did not replace non-air block")
 		}
+	})
+}
+
+func TestReplaceMaskMatchesAllStatesForNamedBlock(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		area := geo.NewArea(0, 0, 0, 2, 0, 0)
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.GlazedTerracotta{Colour: item.ColourBlue(), Facing: cube.North}, nil)
+		tx.SetBlock(cube.Pos{1, 0, 0}, mcblock.GlazedTerracotta{Colour: item.ColourBlue(), Facing: cube.East}, nil)
+		tx.SetBlock(cube.Pos{2, 0, 0}, mcblock.GlazedTerracotta{Colour: item.ColourPurple(), Facing: cube.North}, nil)
+		mask, err := edit.ParseMask("blue_glazed_terracotta")
+		if err != nil {
+			t.Fatalf("ParseMask: %v", err)
+		}
+
+		changed := edit.ReplaceArea(tx, area, mask, []world.Block{mcblock.Stone{}}, nil)
+		if changed != 2 {
+			t.Fatalf("changed = %d, want 2 blue glazed states", changed)
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{0, 0, 0}), mcblock.Stone{}) {
+			t.Fatal("north-facing blue glazed terracotta was not replaced")
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{1, 0, 0}), mcblock.Stone{}) {
+			t.Fatal("east-facing blue glazed terracotta was not replaced")
+		}
+		if got, ok := tx.Block(cube.Pos{2, 0, 0}).(mcblock.GlazedTerracotta); !ok || got.Colour != item.ColourPurple() {
+			t.Fatalf("non-blue glazed terracotta changed to %#v", tx.Block(cube.Pos{2, 0, 0}))
+		}
+	})
+}
+
+func TestReplacePreservesCompatibleTargetState(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		area := geo.NewArea(0, 0, 0, 1, 0, 0)
+		first := mcblock.GlazedTerracotta{Colour: item.ColourBlue(), Facing: cube.North}
+		second := mcblock.GlazedTerracotta{Colour: item.ColourBlue(), Facing: cube.East}
+		tx.SetBlock(cube.Pos{0, 0, 0}, first, nil)
+		tx.SetBlock(cube.Pos{1, 0, 0}, second, nil)
+		mask, err := edit.ParseMask("blue_glazed_terracotta")
+		if err != nil {
+			t.Fatalf("ParseMask: %v", err)
+		}
+
+		changed := edit.ReplaceArea(tx, area, mask, []world.Block{mcblock.GlazedTerracotta{Colour: item.ColourPurple()}}, nil)
+		if changed != 2 {
+			t.Fatalf("changed = %d, want 2", changed)
+		}
+		assertGlazed := func(pos cube.Pos, wantFacing cube.Direction) {
+			t.Helper()
+			got, ok := tx.Block(pos).(mcblock.GlazedTerracotta)
+			if !ok {
+				t.Fatalf("block at %v = %#v, want glazed terracotta", pos, tx.Block(pos))
+			}
+			if got.Colour != item.ColourPurple() || got.Facing != wantFacing {
+				t.Fatalf("block at %v = colour %v facing %v, want purple facing %v", pos, got.Colour, got.Facing, wantFacing)
+			}
+		}
+		assertGlazed(cube.Pos{0, 0, 0}, first.Facing)
+		assertGlazed(cube.Pos{1, 0, 0}, second.Facing)
 	})
 }
 
