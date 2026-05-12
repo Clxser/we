@@ -404,6 +404,46 @@ func TestReplaceMaskCanExplicitlyTargetAir(t *testing.T) {
 	})
 }
 
+func TestReplaceAllMaskSkipsAir(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		area := geo.NewArea(0, 0, 0, 1, 0, 0)
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Air{}, nil)
+		tx.SetBlock(cube.Pos{1, 0, 0}, mcblock.Dirt{}, nil)
+		mask, err := edit.ParseMask("all")
+		if err != nil {
+			t.Fatalf("ParseMask: %v", err)
+		}
+		batch := history.NewBatch(false)
+		edit.ReplaceArea(tx, area, mask, []world.Block{mcblock.Stone{}}, batch)
+		if !parse.IsAir(tx.Block(cube.Pos{0, 0, 0})) {
+			t.Fatal("all mask replaced air")
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{1, 0, 0}), mcblock.Stone{}) {
+			t.Fatal("all mask did not replace non-air block")
+		}
+	})
+}
+
+func TestReplaceEverythingMaskIncludesAir(t *testing.T) {
+	withTx(t, func(tx *world.Tx) {
+		area := geo.NewArea(0, 0, 0, 1, 0, 0)
+		tx.SetBlock(cube.Pos{0, 0, 0}, mcblock.Air{}, nil)
+		tx.SetBlock(cube.Pos{1, 0, 0}, mcblock.Dirt{}, nil)
+		mask, err := edit.ParseMask("everything")
+		if err != nil {
+			t.Fatalf("ParseMask: %v", err)
+		}
+		batch := history.NewBatch(false)
+		edit.ReplaceArea(tx, area, mask, []world.Block{mcblock.Stone{}}, batch)
+		if !parse.SameBlock(tx.Block(cube.Pos{0, 0, 0}), mcblock.Stone{}) {
+			t.Fatal("everything mask did not replace air")
+		}
+		if !parse.SameBlock(tx.Block(cube.Pos{1, 0, 0}), mcblock.Stone{}) {
+			t.Fatal("everything mask did not replace non-air block")
+		}
+	})
+}
+
 func TestPreparedBlockMaskMatchesByKeyAndExplicitAir(t *testing.T) {
 	mask := edit.BlockMask{Blocks: []world.Block{mcblock.Stone{}, mcblock.Air{}}}.Prepared()
 	if !mask.Match(mcblock.Stone{}) {

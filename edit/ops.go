@@ -77,6 +77,10 @@ func (m BlockMask) Prepared() BlockMask {
 func ParseMask(spec string) (BlockMask, error) {
 	spec = strings.TrimSpace(spec)
 	if strings.EqualFold(spec, "all") {
+		return BlockMask{All: true}, nil
+	}
+	switch strings.ToLower(spec) {
+	case "everything", "all+air", "all_air", "*":
 		return BlockMask{All: true, IncludeAir: true}, nil
 	}
 	spec = strings.TrimPrefix(spec, "only:")
@@ -140,27 +144,31 @@ func Walls(tx *world.Tx, area geo.Area, blocks []world.Block, batch *history.Bat
 }
 
 // ReplaceArea swaps blocks matching mask inside area for picks from to.
-func ReplaceArea(tx *world.Tx, area geo.Area, mask BlockMask, to []world.Block, batch *history.Batch) {
+func ReplaceArea(tx *world.Tx, area geo.Area, mask BlockMask, to []world.Block, batch *history.Batch) int {
 	mask = mask.Prepared()
 	if batch != nil {
 		batch.Grow(int(area.Volume()))
 	}
+	changed := 0
 	area.Range(func(x, y, z int) {
 		pos := cube.Pos{x, y, z}
 		if mask.Match(tx.Block(pos)) {
 			setBlockOrBatch(tx, batch, pos, ChooseBlock(to, nil))
+			changed++
 		}
 	})
+	return changed
 }
 
 // ReplaceNear runs ReplaceArea inside a sphere of the given radius around center.
-func ReplaceNear(tx *world.Tx, center cube.Pos, radius int, mask BlockMask, to []world.Block, batch *history.Batch) {
+func ReplaceNear(tx *world.Tx, center cube.Pos, radius int, mask BlockMask, to []world.Block, batch *history.Batch) int {
 	mask = mask.Prepared()
 	r2 := radius * radius
 	area := geo.NewArea(center[0]-radius, center[1]-radius, center[2]-radius, center[0]+radius, center[1]+radius, center[2]+radius)
 	if batch != nil {
 		batch.Grow(int(area.Volume()))
 	}
+	changed := 0
 	area.Range(func(x, y, z int) {
 		dx, dy, dz := x-center[0], y-center[1], z-center[2]
 		if dx*dx+dy*dy+dz*dz > r2 {
@@ -169,8 +177,10 @@ func ReplaceNear(tx *world.Tx, center cube.Pos, radius int, mask BlockMask, to [
 		pos := cube.Pos{x, y, z}
 		if mask.Match(tx.Block(pos)) {
 			setBlockOrBatch(tx, batch, pos, ChooseBlock(to, nil))
+			changed++
 		}
 	})
+	return changed
 }
 
 // TopLayer replaces only the topmost matching block in each (x, z) column of area.

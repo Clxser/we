@@ -239,8 +239,8 @@ func TestReplaceWithNoUndoWritesWithoutRecording(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if result.Changed != 2 {
-			t.Fatalf("changed = %d, want selected volume 2", result.Changed)
+		if result.Changed != 1 {
+			t.Fatalf("changed = %d, want matched count 1", result.Changed)
 		}
 		if s.records != 0 {
 			t.Fatalf("Record called %d times, want 0", s.records)

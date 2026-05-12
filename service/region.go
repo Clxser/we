@@ -156,8 +156,8 @@ func ReplaceWithOptions(tx *world.Tx, s Session, args []string, opts EditOptions
 	if err != nil {
 		return ChangeResult{}, err
 	}
-	edit.ReplaceArea(tx, area, mask, to, batch)
-	return finishEdit(s, batch, int(area.Volume())), nil
+	changed := edit.ReplaceArea(tx, area, mask, to, batch)
+	return finishEdit(s, batch, changed), nil
 }
 
 // ReplaceNear runs Replace inside a sphere of the given distance around center,
@@ -184,8 +184,8 @@ func ReplaceNearWithOptions(tx *world.Tx, s Session, center cube.Pos, distance i
 	if err != nil {
 		return ChangeResult{}, err
 	}
-	edit.ReplaceNear(tx, center, distance, mask, to, batch)
-	return finishEdit(s, batch, diameter*diameter*diameter), nil
+	changed := edit.ReplaceNear(tx, center, distance, mask, to, batch)
+	return finishEdit(s, batch, changed), nil
 }
 
 // TopLayer replaces only the topmost matching block in each (x, z) column of the selection.
