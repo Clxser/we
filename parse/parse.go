@@ -3,8 +3,11 @@ package parse
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"strconv"
 	"strings"
 
+	"github.com/Velvet-MC/s2d/translate"
 	mcblock "github.com/df-mc/dragonfly/server/block"
 	"github.com/df-mc/dragonfly/server/world"
 )
@@ -41,7 +44,7 @@ func BlockKeyOf(b world.Block) BlockKey {
 // BlockFromState decodes a stored block state.
 func BlockFromState(s BlockState) (world.Block, error) {
 	props := NormaliseProps(s.Properties)
-	if b, ok := world.BlockByName(s.Name, props); ok {
+	if b, ok := blockByState(s.Name, props); ok {
 		return b, nil
 	}
 	return nil, fmt.Errorf("unknown block state %s", s.Name)
@@ -81,9 +84,10 @@ func NormaliseProps(props map[string]any) map[string]any {
 
 // ParseBlockList parses a comma or whitespace separated block list.
 func ParseBlockList(input string) ([]world.Block, error) {
-	parts := strings.FieldsFunc(input, func(r rune) bool {
-		return r == ',' || r == ';' || r == ' ' || r == '\t' || r == '\n'
-	})
+	parts, err := splitBlockList(input)
+	if err != nil {
+		return nil, err
+	}
 	blocks := make([]world.Block, 0, len(parts))
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
@@ -109,6 +113,18 @@ func ParseBlock(name string) (world.Block, error) {
 	if name == "" {
 		return nil, fmt.Errorf("empty block name")
 	}
+	blockName, props, exactState, err := parseBlockState(name)
+	if err != nil {
+		return nil, err
+	}
+	if exactState {
+		block, ok := blockByState(blockName, props)
+		if !ok {
+			return nil, fmt.Errorf("unknown block state %q", name)
+		}
+		return block, nil
+	}
+	name = blockName
 	switch name {
 	case "air", "minecraft:air":
 		return mcblock.Air{}, nil
@@ -120,7 +136,7 @@ func ParseBlock(name string) (world.Block, error) {
 	if !strings.Contains(name, ":") {
 		name = "minecraft:" + name
 	}
-	if b, ok := world.BlockByName(name, nil); ok {
+	if b, ok := blockByState(name, nil); ok {
 		return b, nil
 	}
 	for _, b := range world.Blocks() {
@@ -130,6 +146,155 @@ func ParseBlock(name string) (world.Block, error) {
 		}
 	}
 	return nil, fmt.Errorf("unknown block type %q", name)
+}
+
+func splitBlockList(input string) ([]string, error) {
+	var parts []string
+	start, depth := 0, 0
+	for i, r := range input {
+		switch r {
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth < 0 {
+				return nil, fmt.Errorf("unexpected ] in block list")
+			}
+		case ',', ';', ' ', '\t', '\n':
+			if depth == 0 {
+				if part := strings.TrimSpace(input[start:i]); part != "" {
+					parts = append(parts, part)
+				}
+				start = i + len(string(r))
+			}
+		}
+	}
+	if depth != 0 {
+		return nil, fmt.Errorf("unterminated block state in block list")
+	}
+	if part := strings.TrimSpace(input[start:]); part != "" {
+		parts = append(parts, part)
+	}
+	return parts, nil
+}
+
+func parseBlockState(input string) (name string, props map[string]any, exact bool, err error) {
+	open := strings.IndexByte(input, '[')
+	if open < 0 {
+		return normaliseBlockName(input), nil, false, nil
+	}
+	if !strings.HasSuffix(input, "]") {
+		return "", nil, false, fmt.Errorf("malformed block state %q", input)
+	}
+	name = normaliseBlockName(strings.TrimSpace(input[:open]))
+	body := strings.TrimSpace(input[open+1 : len(input)-1])
+	props = map[string]any{}
+	if body == "" {
+		return name, props, true, nil
+	}
+	for _, part := range strings.Split(body, ",") {
+		key, value, ok := strings.Cut(part, "=")
+		if !ok {
+			return "", nil, false, fmt.Errorf("malformed block state property %q", part)
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key == "" || value == "" {
+			return "", nil, false, fmt.Errorf("malformed block state property %q", part)
+		}
+		props[key] = parseBlockStateValue(value)
+	}
+	return name, props, true, nil
+}
+
+func normaliseBlockName(name string) string {
+	name = strings.TrimSpace(name)
+	if !strings.Contains(name, ":") {
+		name = "minecraft:" + name
+	}
+	return name
+}
+
+func parseBlockStateValue(value string) any {
+	value = strings.Trim(value, `"'`)
+	switch value {
+	case "true":
+		return true
+	case "false":
+		return false
+	}
+	if n, err := strconv.ParseInt(value, 10, 32); err == nil {
+		return int32(n)
+	}
+	return value
+}
+
+func blockByState(name string, props map[string]any) (world.Block, bool) {
+	props = NormaliseProps(props)
+	if b, ok := world.BlockByName(name, props); ok {
+		return concreteOrStateBlock(name, props, b), true
+	}
+	for _, b := range world.Blocks() {
+		candidateName, candidateProps := b.EncodeBlock()
+		if candidateName != name || !propertiesEqual(candidateProps, props) {
+			continue
+		}
+		return concreteOrStateBlock(candidateName, candidateProps, b), true
+	}
+	return nil, false
+}
+
+func concreteOrStateBlock(name string, props map[string]any, b world.Block) world.Block {
+	if world.BlockImplemented(name, props) {
+		return b
+	}
+	return translate.NewStateBlock(translate.BedrockState{Name: name, Properties: maps.Clone(props)})
+}
+
+func propertiesEqual(a, b map[string]any) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for key, av := range a {
+		bv, ok := b[key]
+		if !ok || !propertyValueEqual(av, bv) {
+			return false
+		}
+	}
+	return true
+}
+
+func propertyValueEqual(a, b any) bool {
+	switch av := a.(type) {
+	case uint8:
+		switch bv := b.(type) {
+		case uint8:
+			return av == bv
+		case int32:
+			return int32(av) == bv
+		case int:
+			return int(av) == bv
+		}
+	case int32:
+		switch bv := b.(type) {
+		case uint8:
+			return av == int32(bv)
+		case int32:
+			return av == bv
+		case int:
+			return int(av) == bv
+		}
+	case int:
+		switch bv := b.(type) {
+		case uint8:
+			return av == int(bv)
+		case int32:
+			return av == int(bv)
+		case int:
+			return av == bv
+		}
+	}
+	return a == b
 }
 
 // SameBlock compares block identities (name + properties).
